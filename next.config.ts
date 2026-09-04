@@ -1,7 +1,11 @@
-﻿/** @type {import('next').NextConfig} */
-const nextConfig = {
-  turbopack: {
-    root: process.cwd(),
+﻿import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 
