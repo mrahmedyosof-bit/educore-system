@@ -143,6 +143,8 @@ export default function FinanceTab() {
   const [filterMonth, setFilterMonth] = useState('الكل');
   const [filterGrade, setFilterGrade] = useState('الكل');
   const [filterSubject, setFilterSubject] = useState('كل المواد');
+  const [resetPaymentsOpen, setResetPaymentsOpen] = useState(false);
+  const [resetPaymentsLoading, setResetPaymentsLoading] = useState(false);
   const [touchedRemaining, setTouchedRemaining] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
@@ -754,6 +756,45 @@ export default function FinanceTab() {
     }),
     [paymentsWithStatus, filterMonth, filterGrade, filterSubject]
   );
+
+  const handleResetFilteredMonthPayments = useCallback(async () => {
+    if (filterMonth === 'الكل' || filteredPayments.length === 0) return;
+
+    setResetPaymentsLoading(true);
+    setMessage(null);
+    try {
+      await Promise.all(
+        filteredPayments.map((payment) => {
+          if (!payment.student_id) {
+            throw new Error('يوجد سجل دفع بدون طالب مرتبط.');
+          }
+
+          const paid = toFiniteAmount(payment.amount_paid);
+          const remaining = toFiniteAmount(payment.amount_remaining);
+          return updatePayment(payment.id, {
+            student_id: payment.student_id,
+            amount_paid: 0,
+            amount_remaining: paid + remaining,
+            month_name: cleanMonthOption(payment.month_name),
+            academic_year: payment.academic_year,
+            payment_date: payment.payment_date,
+          });
+        })
+      );
+
+      setResetPaymentsOpen(false);
+      setMessage({
+        type: 'success',
+        text: `تم إلغاء مدفوعات شهر ${filterMonth} للطلاب المفلترين.`,
+      });
+      await fetchData();
+    } catch (err: unknown) {
+      const errorText = err instanceof Error ? err.message : 'خطأ غير معروف';
+      setMessage({ type: 'error', text: `تعذر إلغاء المدفوعات: ${errorText}` });
+    } finally {
+      setResetPaymentsLoading(false);
+    }
+  }, [filterMonth, filteredPayments]);
 
   const payingStudents = useMemo(() => {
     return uniqueStudents.filter((s) => s.grade && s.subject && !s.isExempt);
@@ -1628,6 +1669,14 @@ export default function FinanceTab() {
             >
               تحديث 🔄
             </button>
+            <button
+              type="button"
+              onClick={() => setResetPaymentsOpen(true)}
+              disabled={filterMonth === 'الكل' || filteredPayments.length === 0 || resetPaymentsLoading}
+              className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              إلغاء مدفوعات هذا الشهر
+            </button>
           </div>
         </div>
         {fetching ? (
@@ -2143,6 +2192,42 @@ export default function FinanceTab() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {resetPaymentsOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={() => !resetPaymentsLoading && setResetPaymentsOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl border border-rose-200 bg-white p-6 shadow-2xl"
+            dir="rtl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-black text-rose-700">إلغاء مدفوعات الشهر</h3>
+            <p className="mt-3 text-sm font-bold leading-7 text-slate-700">
+              هل أنت متأكد من إلغاء كل مدفوعات شهر {filterMonth}؟ سيتم تصفير المبالغ المدفوعة وإعادتها لحالة غير مسدد للطلاب المفلترين.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setResetPaymentsOpen(false)}
+                disabled={resetPaymentsLoading}
+                className="rounded-2xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleResetFilteredMonthPayments()}
+                disabled={resetPaymentsLoading}
+                className="rounded-2xl bg-rose-600 px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-rose-700 disabled:opacity-50"
+              >
+                {resetPaymentsLoading ? 'جاري الإلغاء...' : 'تأكيد الإلغاء'}
+              </button>
+            </div>
           </div>
         </div>
       )}
