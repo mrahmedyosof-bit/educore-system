@@ -12,7 +12,7 @@ import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
 import WhatsAppButton from './WhatsAppButton';
 import { emitPaymentUpdate } from '@/lib/events';
 import { calculateFinancialSummary, toFiniteAmount } from '@/lib/calculations';
-import { useCenterSettings, generateAcademicYears } from '@/hooks/useCenterSettings';
+import { useCenterSettings } from '@/hooks/useCenterSettings';
 import {
   STAGES,
   ALL_GRADES,
@@ -49,7 +49,7 @@ interface PaymentRecord extends ServicePaymentRecord {
 
 export default function FinanceTab() {
   // ==================== إعدادات السنتر (من الخطاف الموحد) ====================
-  const { settings: centerSettings, updateCenterName, updateAcademicYear } = useCenterSettings();
+  const { settings: centerSettings, updateCenterName } = useCenterSettings();
   const [editingCenterName, setEditingCenterName] = useState(false);
   const [tempCenterName, setTempCenterName] = useState(centerSettings.centerName);
 
@@ -59,8 +59,6 @@ export default function FinanceTab() {
     }
     setEditingCenterName(false);
   };
-
-  const academicYears = useMemo(() => generateAcademicYears(), []);
 
   // ==================== States الأصلية ====================
   const [students, setStudents] = useState<Student[]>([]);
@@ -970,18 +968,6 @@ export default function FinanceTab() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">السنة الدراسية</label>
-            <select
-              value={centerSettings.academicYear}
-              onChange={(e) => updateAcademicYear(e.target.value)}
-              className="rounded-xl border border-indigo-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-800 dark:text-white"
-            >
-              {academicYears.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
 
@@ -1055,7 +1041,9 @@ export default function FinanceTab() {
             <h3 className="text-3xl font-black mt-1 text-amber-600">
               {formatCurrency(todayIncome)}
             </h3>
-            <p className="text-[11px] font-bold mt-1 text-amber-400">اضغط لعرض التفاصيل ↗</p>
+            <p className="text-[11px] font-bold mt-1 text-amber-400">
+              {todayPaymentsCount === 0 ? 'لم تُسجل دفعات اليوم' : 'اضغط لعرض التفاصيل ↗'}
+            </p>
           </div>
           <div className="text-3xl bg-amber-50 p-3 rounded-2xl text-amber-600">📅</div>
         </div>
@@ -1158,7 +1146,7 @@ export default function FinanceTab() {
             e.preventDefault();
             e.currentTarget.requestSubmit();
           }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"
         >
           <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             المرحلة الدراسية
@@ -1375,7 +1363,7 @@ export default function FinanceTab() {
               className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}
             />
           </label>
-          <div className="md:col-span-2 lg:col-span-4 flex justify-end gap-3">
+          <div className="md:col-span-2 lg:col-span-3 flex justify-end gap-3">
             <button
               type="button"
               onClick={openBulkPaymentModal}
