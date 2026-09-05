@@ -1455,12 +1455,19 @@ export default function FinanceTab() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {filteredStudentsForSelect.map((student) => {
                   const studentPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
+                  const studentDue = Math.max(0, studentPrice - toFiniteAmount(student.discountAmount));
                   const existingPayment = payments.find(p =>
-                    p.student_id === student.id && p.month_name === monthName.trim()
+                    p.student_id === student.id &&
+                    p.month_name === monthName.trim() &&
+                    (!p.academic_year || p.academic_year === centerSettings.academicYear)
                   );
-                  const isPaid = existingPayment && Number(existingPayment.amount_remaining ?? 0) === 0;
-                  const paidAmount = existingPayment ? Number(existingPayment.amount_paid || 0) : 0;
-                  const remainingAmount = existingPayment ? Number(existingPayment.amount_remaining || 0) : studentPrice;
+                  const paidAmount = existingPayment ? toFiniteAmount(existingPayment.amount_paid) : 0;
+                  const remainingAmount = existingPayment
+                    ? existingPayment.amount_remaining == null
+                      ? Math.max(0, studentDue - paidAmount)
+                      : Math.max(0, toFiniteAmount(existingPayment.amount_remaining))
+                    : studentDue;
+                  const isPaid = remainingAmount === 0;
                   return (
                     <tr key={student.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40">
                       <td className="p-3 font-bold text-slate-800 dark:text-slate-100">
