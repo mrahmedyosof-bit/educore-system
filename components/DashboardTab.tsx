@@ -212,7 +212,10 @@ export default function DashboardTab({
             if (student.isExempt || !student.grade || !student.subject) return false;
             const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
             const discount = Number(student.discountAmount ?? 0);
-            const finalFee = Math.max(0, price - (Number.isFinite(discount) ? discount : 0));
+            const finalFee = Math.max(
+              0,
+              price + Number(student.dueAmount ?? 0) - (Number.isFinite(discount) ? discount : 0)
+            );
             return Number.isFinite(price) && finalFee > 0;
           })
           .map((student) => student.id)

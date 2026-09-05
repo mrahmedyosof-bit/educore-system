@@ -1567,7 +1567,8 @@ export default function FinanceTab() {
                     setAmountPaid(e.target.value);
                     applyAutoRemaining(e.target.value, selectedDue);
                   }}
-                  placeholder="0.00"
+                  onFocus={(e) => e.currentTarget.select()}
+                  placeholder="0"
                   required
                   className={`${INPUT_CLASS} flex-1`}
                 />

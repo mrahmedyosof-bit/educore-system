@@ -219,17 +219,14 @@ export default function StudentsTab() {
       if (s.isExempt) return 0;
       const basePrice = priceMatrix[priceKey(s.grade ?? '', s.subject ?? '')] ?? 0;
       const totalExpected = Math.max(0, basePrice + (s.dueAmount ?? 0) - (s.discountAmount ?? 0));
+      if (totalExpected <= 0) return 0;
       const currentMonthNormalized = normalizeMonth(currentMonth);
       const studentPayment = payments.find(
         (p) => p.student_id === s.id && normalizeMonth(p.month_name) === currentMonthNormalized
       );
-      if (studentPayment) {
-        if (studentPayment.amount_remaining === 0) {
-          return 0;
-        }
-        return studentPayment.amount_remaining;
-      }
-      return totalExpected;
+      return studentPayment && Number(studentPayment.amount_remaining) > 0
+        ? Number(studentPayment.amount_remaining)
+        : 0;
     },
     [payments, currentMonth, priceMatrix]
   );
@@ -891,7 +888,9 @@ export default function StudentsTab() {
                   min="0"
                   step="0.01"
                   disabled={formData.isExempt}
-                  value={formData.isExempt ? 0 : formData.dueAmount}
+                  value={formData.isExempt || formData.dueAmount === 0 ? '' : formData.dueAmount}
+                  placeholder="0"
+                  onFocus={(e) => e.currentTarget.select()}
                   onChange={handleInputChange}
                   className={`${inputClass} disabled:opacity-40`}
                 />
@@ -907,7 +906,9 @@ export default function StudentsTab() {
                   min="0"
                   step="0.01"
                   disabled={formData.isExempt}
-                  value={formData.isExempt ? 0 : formData.discountAmount}
+                  value={formData.isExempt || formData.discountAmount === 0 ? '' : formData.discountAmount}
+                  placeholder="0"
+                  onFocus={(e) => e.currentTarget.select()}
                   onChange={handleInputChange}
                   className={`${inputClass} disabled:opacity-40`}
                 />
