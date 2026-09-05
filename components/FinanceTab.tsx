@@ -1120,7 +1120,7 @@ export default function FinanceTab() {
         String(student.id),
       ];
       return searchableValues.some((value) =>
-        String(value ?? '').toLowerCase().includes(query)
+        String(value ?? '').trim().toLowerCase().includes(query)
       );
     });
   }, [filteredStudentsForSelect, deferredQuickCollectionSearch]);
@@ -1679,7 +1679,8 @@ export default function FinanceTab() {
               onChange={(e) => setQuickCollectionSearch(e.target.value)}
               placeholder="بحث سريع (اسم الطالب، رقم الهاتف، أو كود/باركود الطالب)..."
               aria-label="بحث سريع في طلاب التحصيل"
-              className={`${INPUT_CLASS} pe-10 ${quickCollectionSearch ? 'pe-20' : ''}`}
+              dir="rtl"
+              className={`${INPUT_CLASS} pr-10 pl-10 text-right`}
             />
             <span
               aria-hidden="true"

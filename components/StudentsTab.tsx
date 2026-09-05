@@ -562,12 +562,25 @@ export default function StudentsTab() {
 
   const filteredStudents = useMemo(() => {
     const normalizedSearch = deferredSearchQuery.trim().toLowerCase();
+    const gradeFilter = (selectedGrade || '').trim();
+    const subjectFilter = (selectedSubject || '').trim();
+    const groupFilter = (selectedGroup || '').trim();
+    const hasActiveFilters = Boolean(
+      normalizedSearch ||
+      (gradeFilter && gradeFilter !== 'الكل') ||
+      (subjectFilter && subjectFilter !== 'الكل') ||
+      (groupFilter && groupFilter !== 'الكل') ||
+      activeCardFilter !== 'all'
+    );
+
+    if (!hasActiveFilters) return uniqueStudents;
+
     return uniqueStudents.filter((student) => {
-      const studentName = student.name?.toLowerCase() || '';
-      const studentBarcode = student.barcode?.toLowerCase() || '';
-      const guardianName = student.guardian_name?.toLowerCase() || '';
-      const guardianPhone = student.guardian_phone?.toLowerCase() || '';
-      const guardianWhatsapp = student.guardian_whatsapp?.toLowerCase() || '';
+      const studentName = String(student.name ?? '').trim().toLowerCase();
+      const studentBarcode = String(student.barcode ?? '').trim().toLowerCase();
+      const guardianName = String(student.guardian_name ?? '').trim().toLowerCase();
+      const guardianPhone = String(student.guardian_phone ?? '').trim().toLowerCase();
+      const guardianWhatsapp = String(student.guardian_whatsapp ?? '').trim().toLowerCase();
       const matchesSearch =
         normalizedSearch === '' ||
         studentName.includes(normalizedSearch) ||
@@ -575,9 +588,9 @@ export default function StudentsTab() {
         guardianName.includes(normalizedSearch) ||
         guardianPhone.includes(normalizedSearch) ||
         guardianWhatsapp.includes(normalizedSearch);
-      const matchesGrade = selectedGrade === 'الكل' || student.grade === selectedGrade;
-      const matchesSubject = selectedSubject === 'الكل' || student.subject === selectedSubject;
-      const matchesGroup = selectedGroup === 'الكل' || student.group === selectedGroup;
+      const matchesGrade = !gradeFilter || gradeFilter === 'الكل' || String(student.grade ?? '').trim() === gradeFilter;
+      const matchesSubject = !subjectFilter || subjectFilter === 'الكل' || String(student.subject ?? '').trim() === subjectFilter;
+      const matchesGroup = !groupFilter || groupFilter === 'الكل' || String(student.group ?? '').trim() === groupFilter;
       let matchesCardFilter = true;
       switch (activeCardFilter) {
         case 'unique_students':
