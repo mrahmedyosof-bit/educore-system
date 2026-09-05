@@ -1,5 +1,5 @@
 ﻿'use client';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useDeferredValue, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCurriculumSettings } from '@/hooks/useCurriculumSettings';
 import { useCenterSettings } from '@/hooks/useCenterSettings';
@@ -148,6 +148,8 @@ export default function DashboardTab({
   const [collectQuery, setCollectQuery] = useState('');
   const [dueSearchQuery, setDueSearchQuery] = useState('');
   const [dueSelectedGrade, setDueSelectedGrade] = useState('الكل');
+  const deferredDueSearchQuery = useDeferredValue(dueSearchQuery);
+  const deferredCollectQuery = useDeferredValue(collectQuery);
 
   const {
     stages,
@@ -384,7 +386,7 @@ export default function DashboardTab({
   );
 
   const filteredDueStudents = useMemo(() => {
-    const q = dueSearchQuery.trim().toLowerCase();
+    const q = deferredDueSearchQuery.trim().toLowerCase();
     return [...studentsWithDue]
       .sort((a, b) => b.dueAmount - a.dueAmount)
       .filter((s) => {
@@ -397,7 +399,21 @@ export default function DashboardTab({
           (s.phone || '').toLowerCase().includes(q)
         );
       });
-  }, [studentsWithDue, dueSearchQuery, dueSelectedGrade]);
+  }, [studentsWithDue, deferredDueSearchQuery, dueSelectedGrade]);
+
+  const filteredCollectStudents = useMemo(() => {
+    const query = deferredCollectQuery.trim().toLowerCase();
+    return [...studentsWithDue]
+      .sort((a, b) => b.dueAmount - a.dueAmount)
+      .filter((student) => {
+        if (!query) return true;
+        return (
+          student.name.toLowerCase().includes(query) ||
+          (student.parent_phone || '').toLowerCase().includes(query) ||
+          (student.phone || '').toLowerCase().includes(query)
+        );
+      });
+  }, [studentsWithDue, deferredCollectQuery]);
 
   const kpiCards = [
     {
@@ -850,17 +866,10 @@ export default function DashboardTab({
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-900 dark:text-white focus:border-indigo-500 focus:outline-none"
             />
             <div className="mt-3 max-h-[50vh] space-y-2 overflow-y-auto">
-              {studentsWithDue.length === 0 ? (
+              {filteredCollectStudents.length === 0 ? (
                 <p className="py-8 text-center text-xs font-bold text-slate-400">لا توجد متأخرات مسجلة حالياً.</p>
               ) : (
-                [...studentsWithDue]
-                  .sort((a, b) => b.dueAmount - a.dueAmount)
-                  .filter((s) => {
-                    const q = collectQuery.trim().toLowerCase();
-                    if (!q) return true;
-                    return s.name.toLowerCase().includes(q) || (s.parent_phone || '').includes(q);
-                  })
-                  .map((student) => {
+                filteredCollectStudents.map((student) => {
                     const reminderPhone = student.parent_phone || student.phone;
                     const phoneOk = !isPhoneMissing(reminderPhone);
                     return (

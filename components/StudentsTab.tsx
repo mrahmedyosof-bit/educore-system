@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState, useCallback, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
+import { useMemo, useState, useCallback, useDeferredValue, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useAppData } from './AppContext';
 import { useCurriculumSettings } from '@/hooks/useCurriculumSettings';
 import { getUniqueStudentsCount } from '@/lib/services/students';
@@ -126,6 +126,13 @@ export default function StudentsTab() {
     () => new Date().toLocaleString('ar-EG', { month: 'long', year: 'numeric' }),
     []
   );
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const subscriptionCountByStudent = useMemo(() => {
+    const counts = new Map<number, number>();
+    students.forEach((student) => counts.set(student.id, (counts.get(student.id) ?? 0) + 1));
+    return counts;
+  }, [students]);
 
   useEffect(() => {
     getUniqueStudentsCount().then(setUniqueStudentsCount).catch(console.error);
@@ -550,7 +557,7 @@ export default function StudentsTab() {
   const exemptCount = useMemo(() => uniqueStudents.filter((s) => s.isExempt).length, [uniqueStudents]);
 
   const filteredStudents = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const normalizedSearch = deferredSearchQuery.trim().toLowerCase();
     return uniqueStudents.filter((student) => {
       const studentName = student.name?.toLowerCase() || '';
       const studentBarcode = student.barcode?.toLowerCase() || '';
@@ -573,7 +580,7 @@ export default function StudentsTab() {
           matchesCardFilter = true;
           break;
         case 'total_subscriptions':
-          matchesCardFilter = students.filter((s) => s.id === student.id).length > 1;
+          matchesCardFilter = (subscriptionCountByStudent.get(student.id) ?? 0) > 1;
           break;
         case 'pending_payment':
           matchesCardFilter = netDueOf(student) > 0;
@@ -591,7 +598,7 @@ export default function StudentsTab() {
       }
       return matchesSearch && matchesGrade && matchesSubject && matchesGroup && matchesCardFilter;
     });
-  }, [uniqueStudents, students, searchQuery, selectedGrade, selectedSubject, selectedGroup, activeCardFilter, netDueOf]);
+  }, [uniqueStudents, selectedGrade, selectedSubject, selectedGroup, activeCardFilter, netDueOf, deferredSearchQuery, subscriptionCountByStudent]);
 
   const inputClass =
     'w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm font-bold text-slate-800 focus:border-indigo-600 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 leading-tight';

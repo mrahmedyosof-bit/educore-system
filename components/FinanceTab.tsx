@@ -1,5 +1,5 @@
 'use client';
-import React, { startTransition, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { startTransition, useDeferredValue, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   addPayment,
   updatePayment,
@@ -182,6 +182,9 @@ export default function FinanceTab() {
     existingPaymentId?: number;
   }>>([]);
   const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
+  const deferredQuickCollectionSearch = useDeferredValue(quickCollectionSearch);
+  const deferredPaidStudentsSearch = useDeferredValue(paidStudentsSearch);
+  const deferredTodayPaymentsSearch = useDeferredValue(todayPaymentsSearch);
 
   const studentsById = useMemo(
     () => new Map(students.map((student) => [student.id, student])),
@@ -995,12 +998,12 @@ export default function FinanceTab() {
   }, [payments, currentMonth]);
 
   const filteredPaidStudents = useMemo(() => {
-    if (!paidStudentsSearch.trim()) return paidStudentsCurrentMonth;
-    const query = paidStudentsSearch.trim().toLowerCase();
+    if (!deferredPaidStudentsSearch.trim()) return paidStudentsCurrentMonth;
+    const query = deferredPaidStudentsSearch.trim().toLowerCase();
     return paidStudentsCurrentMonth.filter((p) =>
       p.studentName.toLowerCase().includes(query)
     );
-  }, [paidStudentsCurrentMonth, paidStudentsSearch]);
+  }, [paidStudentsCurrentMonth, deferredPaidStudentsSearch]);
 
   const todayPayments = useMemo(() => {
     return payments
@@ -1023,12 +1026,12 @@ export default function FinanceTab() {
   const todayPaymentsCount = useMemo(() => todayPayments.length, [todayPayments]);
 
   const filteredTodayPayments = useMemo(() => {
-    if (!todayPaymentsSearch.trim()) return todayPayments;
-    const query = todayPaymentsSearch.trim().toLowerCase();
+    if (!deferredTodayPaymentsSearch.trim()) return todayPayments;
+    const query = deferredTodayPaymentsSearch.trim().toLowerCase();
     return todayPayments.filter((p) =>
       p.studentName.toLowerCase().includes(query)
     );
-  }, [todayPayments, todayPaymentsSearch]);
+  }, [todayPayments, deferredTodayPaymentsSearch]);
 
   const stages = useMemo(() => {
     const unique = new Set<string>();
@@ -1104,7 +1107,7 @@ export default function FinanceTab() {
   }, [uniqueStudents, selectedStage, selectedGrade]);
 
   const quickCollectionStudents = useMemo(() => {
-    const query = quickCollectionSearch.trim().toLowerCase();
+    const query = deferredQuickCollectionSearch.trim().toLowerCase();
     if (!query) return filteredStudentsForSelect;
 
     return filteredStudentsForSelect.filter((student) => {
@@ -1120,7 +1123,7 @@ export default function FinanceTab() {
         String(value ?? '').toLowerCase().includes(query)
       );
     });
-  }, [filteredStudentsForSelect, quickCollectionSearch]);
+  }, [filteredStudentsForSelect, deferredQuickCollectionSearch]);
 
   const printLastPaymentReceipt = useCallback(() => {
     if (!lastPayment) return;
