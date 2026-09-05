@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { startTransition, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   addPayment,
   updatePayment,
@@ -414,95 +414,138 @@ export default function FinanceTab() {
     setTouchedRemaining(false);
   }, []);
 
+  const bulkGroupStudents = useMemo(
+    () => students.filter((student) =>
+      student.stage === bulkPaymentStage &&
+      student.grade === bulkPaymentGrade &&
+      student.group_name === bulkPaymentGroup &&
+      student.subject === bulkPaymentSubject
+    ),
+    [students, bulkPaymentStage, bulkPaymentGrade, bulkPaymentGroup, bulkPaymentSubject]
+  );
+
+  const bulkPaymentRows = useMemo(() => {
+    const groupStudentIds = new Set(bulkGroupStudents.map((student) => student.id));
+    const normalizedMonth = cleanMonthOption(bulkPaymentMonth);
+    const existingPaymentsByStudent = new Map(
+      payments
+        .filter((payment) =>
+          cleanMonthOption(payment.month_name) === normalizedMonth &&
+          payment.student_id != null &&
+          groupStudentIds.has(payment.student_id)
+        )
+        .map((payment) => [payment.student_id as number, payment])
+    );
+
+    return bulkGroupStudents.map((student) => {
+      const existingPayment = existingPaymentsByStudent.get(student.id);
+      const defaultPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
+      return {
+        student,
+        amountPaid: existingPayment ? Number(existingPayment.amount_paid || 0) : 0,
+        amountRemaining: existingPayment ? Number(existingPayment.amount_remaining || 0) : defaultPrice,
+        defaultPrice,
+        hasPayment: !!existingPayment,
+        existingPaymentId: existingPayment?.id,
+      };
+    });
+  }, [bulkGroupStudents, bulkPaymentMonth, payments, priceMatrix]);
+
+  const bulkPaymentTotals = useMemo(
+    () => bulkPaymentStudents.reduce(
+      (totals, student) => ({
+        paid: totals.paid + student.amountPaid,
+        remaining: totals.remaining + student.amountRemaining,
+        fees: totals.fees + student.defaultPrice,
+      }),
+      { paid: 0, remaining: 0, fees: 0 }
+    ),
+    [bulkPaymentStudents]
+  );
+
   const loadBulkPaymentStudents = useCallback(async () => {
     if (!bulkPaymentStage || !bulkPaymentGrade || !bulkPaymentGroup || !bulkPaymentSubject || !bulkPaymentMonth) return;
     setBulkPaymentLoading(true);
     try {
-      const groupStudents = students.filter(s =>
-        s.stage === bulkPaymentStage &&
-        s.grade === bulkPaymentGrade &&
-        s.group_name === bulkPaymentGroup &&
-        s.subject === bulkPaymentSubject
-      );
-      const existingPayments = payments.filter(p =>
-        cleanMonthOption(p.month_name) === cleanMonthOption(bulkPaymentMonth) &&
-        groupStudents.some(gs => gs.id === p.student_id)
-      );
-      const studentsWithPaymentInfo = groupStudents.map(student => {
-        const existingPayment = existingPayments.find(p => p.student_id === student.id);
-        const defaultPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
-        return {
-          student,
-          amountPaid: existingPayment ? Number(existingPayment.amount_paid || 0) : 0,
-          amountRemaining: existingPayment ? Number(existingPayment.amount_remaining || 0) : defaultPrice,
-          defaultPrice,
-          hasPayment: !!existingPayment,
-          existingPaymentId: existingPayment?.id,
-        };
+      startTransition(() => {
+        setBulkPaymentStudents(bulkPaymentRows);
       });
-      setBulkPaymentStudents(studentsWithPaymentInfo);
     } catch (err) {
       console.error('Error loading bulk payment students:', err);
       setMessage({ type: 'error', text: 'فشل في تحميل طلاب المجموعة' });
     } finally {
       setBulkPaymentLoading(false);
     }
-  }, [bulkPaymentStage, bulkPaymentGrade, bulkPaymentGroup, bulkPaymentSubject, bulkPaymentMonth, students, payments, priceMatrix]);
+  }, [bulkPaymentStage, bulkPaymentGrade, bulkPaymentGroup, bulkPaymentSubject, bulkPaymentMonth, bulkPaymentRows]);
 
   const handleBulkPaymentStageChange = useCallback((stage: string) => {
-    setBulkPaymentStage(stage);
-    setBulkPaymentGrade('');
-    setBulkPaymentGroup('');
-    setBulkPaymentSubject('');
-    setBulkPaymentStudents([]);
+    startTransition(() => {
+      setBulkPaymentStage(stage);
+      setBulkPaymentGrade('');
+      setBulkPaymentGroup('');
+      setBulkPaymentSubject('');
+      setBulkPaymentStudents([]);
+    });
   }, []);
 
   const handleBulkPaymentGradeChange = useCallback((grade: string) => {
-    setBulkPaymentGrade(grade);
-    setBulkPaymentGroup('');
-    setBulkPaymentSubject('');
-    setBulkPaymentStudents([]);
+    startTransition(() => {
+      setBulkPaymentGrade(grade);
+      setBulkPaymentGroup('');
+      setBulkPaymentSubject('');
+      setBulkPaymentStudents([]);
+    });
   }, []);
 
   const handleBulkPaymentGroupChange = useCallback((group: string) => {
-    setBulkPaymentGroup(group);
-    setBulkPaymentSubject('');
-    setBulkPaymentStudents([]);
+    startTransition(() => {
+      setBulkPaymentGroup(group);
+      setBulkPaymentSubject('');
+      setBulkPaymentStudents([]);
+    });
   }, []);
 
   const handleBulkPaymentSubjectChange = useCallback((subject: string) => {
-    setBulkPaymentSubject(subject);
-    setBulkPaymentStudents([]);
+    startTransition(() => {
+      setBulkPaymentSubject(subject);
+      setBulkPaymentStudents([]);
+    });
   }, []);
 
   const handleBulkPaymentMonthChange = useCallback((month: string) => {
-    setBulkPaymentMonth(month);
-    setBulkPaymentStudents([]);
+    startTransition(() => {
+      setBulkPaymentMonth(month);
+      setBulkPaymentStudents([]);
+    });
   }, []);
 
   const handleMarkAllAsPaid = useCallback(() => {
-    setBulkPaymentStudents(prev => prev.map(s => ({
-      ...s,
-      amountPaid: s.defaultPrice,
-      amountRemaining: 0,
-    })));
+    startTransition(() => {
+      setBulkPaymentStudents(prev => prev.map(s => ({
+        ...s,
+        amountPaid: s.defaultPrice,
+        amountRemaining: 0,
+      })));
+    });
   }, []);
 
   const handleBulkPaymentAmountChange = useCallback((studentId: number, field: 'amountPaid' | 'amountRemaining', value: string) => {
     const numValue = Number(value) || 0;
-    setBulkPaymentStudents(prev => prev.map(s => {
-      if (s.student.id === studentId) {
-        const newAmountPaid = field === 'amountPaid' ? numValue : s.amountPaid;
-        const newAmountRemaining = field === 'amountRemaining' ? numValue : Math.max(0, s.defaultPrice - newAmountPaid);
-        const finalRemaining = field === 'amountPaid' ? Math.max(0, s.defaultPrice - newAmountPaid) : newAmountRemaining;
-        return {
-          ...s,
-          amountPaid: newAmountPaid,
-          amountRemaining: finalRemaining,
-        };
-      }
-      return s;
-    }));
+    startTransition(() => {
+      setBulkPaymentStudents(prev => prev.map(s => {
+        if (s.student.id === studentId) {
+          const newAmountPaid = field === 'amountPaid' ? numValue : s.amountPaid;
+          const newAmountRemaining = field === 'amountRemaining' ? numValue : Math.max(0, s.defaultPrice - newAmountPaid);
+          const finalRemaining = field === 'amountPaid' ? Math.max(0, s.defaultPrice - newAmountPaid) : newAmountRemaining;
+          return {
+            ...s,
+            amountPaid: newAmountPaid,
+            amountRemaining: finalRemaining,
+          };
+        }
+        return s;
+      }));
+    });
   }, []);
 
   const handleSaveBulkPayment = useCallback(async () => {
@@ -537,12 +580,14 @@ export default function FinanceTab() {
       showToast({ type: 'success', text: bulkSuccessText });
       playSuccessSound();
       setShowBulkPaymentModal(false);
-      setBulkPaymentStage('');
-      setBulkPaymentGrade('');
-      setBulkPaymentGroup('');
-      setBulkPaymentSubject('');
-      setBulkPaymentMonth('');
-      setBulkPaymentStudents([]);
+      startTransition(() => {
+        setBulkPaymentStage('');
+        setBulkPaymentGrade('');
+        setBulkPaymentGroup('');
+        setBulkPaymentSubject('');
+        setBulkPaymentMonth('');
+        setBulkPaymentStudents([]);
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'خطأ غير معروف';
       setMessage({ type: 'error', text: `حدث خطأ أثناء حفظ التحصيل الجماعي: ${message}` });
@@ -553,22 +598,26 @@ export default function FinanceTab() {
 
   const openBulkPaymentModal = useCallback(() => {
     setShowBulkPaymentModal(true);
-    setBulkPaymentStage('');
-    setBulkPaymentGrade('');
-    setBulkPaymentGroup('');
-    setBulkPaymentSubject('');
-    setBulkPaymentStudents([]);
-    setBulkPaymentMonth(cleanMonthOption(getCurrentMonthName()));
+    startTransition(() => {
+      setBulkPaymentStage('');
+      setBulkPaymentGrade('');
+      setBulkPaymentGroup('');
+      setBulkPaymentSubject('');
+      setBulkPaymentStudents([]);
+      setBulkPaymentMonth(cleanMonthOption(getCurrentMonthName()));
+    });
   }, []);
 
   const closeBulkPaymentModal = useCallback(() => {
     setShowBulkPaymentModal(false);
-    setBulkPaymentStage('');
-    setBulkPaymentGrade('');
-    setBulkPaymentGroup('');
-    setBulkPaymentSubject('');
-    setBulkPaymentMonth('');
-    setBulkPaymentStudents([]);
+    startTransition(() => {
+      setBulkPaymentStage('');
+      setBulkPaymentGrade('');
+      setBulkPaymentGroup('');
+      setBulkPaymentSubject('');
+      setBulkPaymentMonth('');
+      setBulkPaymentStudents([]);
+    });
   }, []);
 
   const handleStartEdit = useCallback((student: Student) => {
@@ -2525,9 +2574,12 @@ export default function FinanceTab() {
               ) : (
                 <>
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-600">
-                      إجمالي: {bulkPaymentStudents.length} طالب
-                    </span>
+                    <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-600">
+                      <span>إجمالي: {bulkPaymentStudents.length} طالب</span>
+                      <span className="text-indigo-600">الرسوم: {formatCurrency(bulkPaymentTotals.fees)}</span>
+                      <span className="text-emerald-600">المدفوع: {formatCurrency(bulkPaymentTotals.paid)}</span>
+                      <span className="text-rose-600">المتبقي: {formatCurrency(bulkPaymentTotals.remaining)}</span>
+                    </div>
                     <button
                       type="button"
                       onClick={handleMarkAllAsPaid}
