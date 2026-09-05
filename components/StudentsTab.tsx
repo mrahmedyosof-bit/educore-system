@@ -470,6 +470,13 @@ export default function StudentsTab() {
       address: student.address ?? '',
       school: student.school ?? '',
     });
+    window.requestAnimationFrame(() => {
+      const formContainer = document.getElementById('student-form');
+      if (!formContainer) return;
+      const yOffset = -120;
+      const top = formContainer.getBoundingClientRect().top + window.scrollY + yOffset;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    });
   };
 
   const handleCancelEdit = () => {
@@ -753,7 +760,7 @@ export default function StudentsTab() {
               </button>
             )}
           </div>
-          <form onSubmit={handleSubmitForm} className="space-y-5">
+          <form id="student-form" onSubmit={handleSubmitForm} className="space-y-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label htmlFor="student-name" className={labelTextClass}>
