@@ -11,7 +11,7 @@ import { getPriceMatrix, priceKey, type PriceMatrix } from '@/lib/services/setti
 import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
 import WhatsAppButton from './WhatsAppButton';
 import { emitPaymentUpdate } from '@/lib/events';
-import { calculateFinancialSummary } from '@/lib/calculations';
+import { calculateFinancialSummary, toFiniteAmount } from '@/lib/calculations';
 import { useCenterSettings, generateAcademicYears } from '@/hooks/useCenterSettings';
 import {
   STAGES,
@@ -764,7 +764,7 @@ export default function FinanceTab() {
         studentName: p.student?.name || 'طالب محذوف',
         grade: p.student?.grade || '-',
         subject: p.student?.subject || '-',
-        paidAmount: Number(p.amount_paid || 0),
+        paidAmount: toFiniteAmount(p.amount_paid),
         paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('ar-EG') : '-',
       }))
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
@@ -793,7 +793,7 @@ export default function FinanceTab() {
   }, [payments, todayDate]);
 
   const todayIncome = useMemo(() => {
-    return todayPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+    return todayPayments.reduce((sum, p) => sum + toFiniteAmount(p.paidAmount), 0);
   }, [todayPayments]);
 
   const todayPaymentsCount = useMemo(() => todayPayments.length, [todayPayments]);
@@ -1735,10 +1735,10 @@ export default function FinanceTab() {
                   <td colSpan={3} className="p-3 font-bold text-slate-800 text-center">إجمالي التحصيل (مفلتر)</td>
                   <td className="p-3 font-bold text-slate-600">{filteredPayments.length} عملية</td>
                   <td className="p-3 font-bold text-emerald-600 text-lg">
-                    {formatCurrency(filteredPayments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0))}
+                    {formatCurrency(filteredPayments.reduce((sum, p) => sum + toFiniteAmount(p.amount_paid), 0))}
                   </td>
                   <td className="p-3 font-bold text-rose-600 text-lg">
-                    {formatCurrency(filteredPayments.reduce((sum, p) => sum + Number(p.amount_remaining || 0), 0))}
+                    {formatCurrency(filteredPayments.reduce((sum, p) => sum + toFiniteAmount(p.amount_remaining ?? 0), 0))}
                   </td>
                   <td className="p-3">
                     <span className="rounded-lg bg-blue-50 px-2.5 py-1 font-black text-blue-700">
@@ -1773,7 +1773,7 @@ export default function FinanceTab() {
                   {paidStudentsCurrentMonth.length} طالب
                 </span>
                 <span className="text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-xl">
-                  إجمالي: {formatCurrency(paidStudentsCurrentMonth.reduce((sum, p) => sum + p.paidAmount, 0))}
+                  إجمالي: {formatCurrency(paidStudentsCurrentMonth.reduce((sum, p) => sum + toFiniteAmount(p.paidAmount), 0))}
                 </span>
                 <button
                   type="button"
@@ -1799,7 +1799,7 @@ export default function FinanceTab() {
                         <body>
                           <h2 style="text-align: center;">${escapeHtml(centerSettings.centerName)}</h2>
                           <h3 style="text-align: center;">كشف الإيرادات المحصلة - ${escapeHtml(currentMonth)} (${escapeHtml(centerSettings.academicYear)})</h3>
-                          <p style="text-align: center; color: #666;">إجمالي التحصيل: ${paidStudentsCurrentMonth.reduce((sum, p) => sum + p.paidAmount, 0).toLocaleString()} ج.م</p>
+                          <p style="text-align: center; color: #666;">إجمالي التحصيل: ${paidStudentsCurrentMonth.reduce((sum, p) => sum + toFiniteAmount(p.paidAmount), 0).toLocaleString()} ج.م</p>
                           ${tableHtml}
                           <script>window.onload = () => window.print();<\/script>
                         </body>

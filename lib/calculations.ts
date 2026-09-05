@@ -7,21 +7,28 @@ export interface FinancialSummary {
   collectionRate: number;
 }
 
+export const toFiniteAmount = (value: unknown): number => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
 export const calculateFinancialSummary = (
   totalDue: number,
   payments: Pick<Payment, 'amount_paid'>[] = []
 ): FinancialSummary => {
   const normalizedDue = Number.isFinite(totalDue) ? Math.max(0, totalDue) : 0;
   const totalPaid = payments.reduce((sum, payment) => {
-    const amountPaid = Number(payment.amount_paid);
-    return sum + (Number.isFinite(amountPaid) && amountPaid > 0 ? amountPaid : 0);
+    const amountPaid = toFiniteAmount(payment.amount_paid);
+    return sum + (amountPaid > 0 ? amountPaid : 0);
   }, 0);
 
   return {
     totalDue: normalizedDue,
     totalPaid,
     totalRemaining: Math.max(0, normalizedDue - totalPaid),
-    collectionRate: normalizedDue > 0 ? Math.round((totalPaid / normalizedDue) * 100) : 0,
+    collectionRate: normalizedDue > 0
+      ? Math.min(100, Math.round((totalPaid / normalizedDue) * 100))
+      : 0,
   };
 };
 
@@ -30,8 +37,7 @@ export const calculateFinancialSummary = (
  */
 export const calculateTotalRevenue = (payments: Payment[] = []): number => {
   return payments.reduce((sum, p) => {
-    const amountPaid = Number(p.amount_paid);
-    return sum + (Number.isFinite(amountPaid) ? amountPaid : 0);
+    return sum + toFiniteAmount(p.amount_paid);
   }, 0);
 };
 
@@ -40,8 +46,7 @@ export const calculateTotalRevenue = (payments: Payment[] = []): number => {
  */
 export const calculateTotalRemaining = (payments: Payment[] = []): number => {
   return payments.reduce((sum, p) => {
-    const amountRemaining = Number(p.amount_remaining);
-    return sum + (Number.isFinite(amountRemaining) ? amountRemaining : 0);
+    return sum + toFiniteAmount(p.amount_remaining ?? 0);
   }, 0);
 };
 

@@ -11,6 +11,7 @@ import { getPayments } from '@/lib/services/payments';
 import { getStudents, Student } from '@/lib/services/students';
 import { getPriceMatrix, priceKey, type PriceMatrix } from '@/lib/services/settings';
 import { getFriendlyErrorMessage } from '@/lib/errors';
+import { toFiniteAmount } from '@/lib/calculations';
 // ✅ استيراد Hook إعدادات السنتر
 import { useCenterSettings } from '@/hooks/useCenterSettings';
 
@@ -21,6 +22,7 @@ const EXPENSE_CATEGORIES = [
   'طباعة ورقيات',
   'أدوات كتابية',
   'رواتب مساعدين',
+  'مرافق',
   'أخرى',
 ] as const;
 
@@ -31,15 +33,19 @@ interface TreasuryStats {
 
 type ModalKind = 'revenue' | 'expenses' | 'profit' | 'exemptions' | null;
 
-const sumBy = <T,>(rows: T[], pick: (row: T) => number): number =>
-  rows.reduce((total, row) => total + pick(row), 0);
+const sumBy = <T,>(rows: T[], pick: (row: T) => unknown): number =>
+  rows.reduce((total, row) => total + toFiniteAmount(pick(row)), 0);
 
 export default function ExpensesTab() {
   // ✅ استخدام إعدادات السنتر
   const { settings: centerSettings } = useCenterSettings();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [payments, setPayments] = useState<{ amount: number; date: string }[]>([]);
+  const [payments, setPayments] = useState<{
+    amount: number;
+    date: string;
+    academicYear: string | null;
+  }[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [priceMatrix, setPriceMatrix] = useState<PriceMatrix>({});
   const [loading, setLoading] = useState(true);
@@ -69,6 +75,7 @@ export default function ExpensesTab() {
         paymentData.map((p) => ({
           amount: Number(p.amount_paid ?? 0),
           date: (p.payment_date || p.created_at || '').slice(0, 10),
+          academicYear: p.academic_year,
         }))
       );
       setStudents(studentData);
@@ -98,7 +105,16 @@ export default function ExpensesTab() {
 
   /* ==================== الحسابات المالية ==================== */
 
-  const totalRevenue = useMemo(() => sumBy(payments, (p) => p.amount), [payments]);
+  const scopedPayments = useMemo(
+    () => payments.filter(
+      (payment) =>
+        !payment.academicYear ||
+        payment.academicYear === centerSettings.academicYear
+    ),
+    [payments, centerSettings.academicYear]
+  );
+
+  const totalRevenue = useMemo(() => sumBy(scopedPayments, (p) => p.amount), [scopedPayments]);
   const totalExpenses = useMemo(() => sumBy(expenses, (e) => e.amount), [expenses]);
   const netProfit = totalRevenue - totalExpenses;
 
@@ -165,7 +181,7 @@ export default function ExpensesTab() {
   const periodStats = useCallback(
     (filterFn: (isoDate: string) => boolean): TreasuryStats => ({
       revenue: sumBy(
-        payments.filter((p) => p.date && filterFn(p.date)),
+        scopedPayments.filter((p) => p.date && filterFn(p.date)),
         (p) => p.amount
       ),
       expenses: sumBy(
@@ -173,7 +189,7 @@ export default function ExpensesTab() {
         (e) => e.amount
       ),
     }),
-    [payments, expenses]
+    [scopedPayments, expenses]
   );
 
   const weekly = useMemo(() => {
@@ -594,7 +610,7 @@ export default function ExpensesTab() {
           <div className={modalBox} dir="rtl" onClick={(e) => e.stopPropagation()}>
             {modalHeader('💰 تفصيل الإيرادات (مدفوعات الطلاب)')}
             <div className="max-h-[60vh] overflow-y-auto">
-              {payments.length === 0 ? (
+              {scopedPayments.length === 0 ? (
                 <p className="py-8 text-center text-xs font-bold text-slate-400">لا توجد مدفوعات مسجلة.</p>
               ) : (
                 <table className="w-full text-right text-xs">
@@ -605,7 +621,7 @@ export default function ExpensesTab() {
                     </tr>
                   </thead>
                   <tbody className={tableBody}>
-                    {payments.map((p, i) => (
+                    {scopedPayments.map((p, i) => (
                       <tr key={i} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40">
                         <td className="p-3 font-mono text-slate-500 dark:text-slate-400" dir="ltr">{p.date}</td>
                         <td className="p-3 font-black text-emerald-600 dark:text-emerald-400">
