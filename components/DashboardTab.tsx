@@ -86,6 +86,46 @@ const attendanceBadgeClass = (pct: number): string => {
   return 'text-slate-500 bg-slate-200/60 dark:bg-slate-800';
 };
 
+const cleanMonthOption = (value: string): string => {
+  const monthNames: Record<string, string> = {
+    January: 'يناير',
+    February: 'فبراير',
+    March: 'مارس',
+    April: 'أبريل',
+    May: 'مايو',
+    June: 'يونيو',
+    July: 'يوليو',
+    August: 'أغسطس',
+    September: 'سبتمبر',
+    October: 'أكتوبر',
+    November: 'نوفمبر',
+    December: 'ديسمبر',
+  };
+
+  return value
+    .replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, (month) => monthNames[month])
+    .replace(/[٠-٩۰-۹]/g, (digit) => {
+      const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+      const easternDigits = '۰۱۲۳۴۵۶۷۸۹';
+      const arabicIndex = arabicDigits.indexOf(digit);
+      const easternIndex = easternDigits.indexOf(digit);
+      return String(arabicIndex >= 0 ? arabicIndex : easternIndex);
+    })
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/[,،\-_\.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const formatDashboardMonth = (value: string): string => {
+  const [year, month] = value.split('-').map(Number);
+  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || month < 1 || month > 12) {
+    return cleanMonthOption(value);
+  }
+  const englishMonth = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' });
+  return cleanMonthOption(`${englishMonth} ${year}`);
+};
+
 export default function DashboardTab({
   onOpenQRScanner,
   onNavigateToTab,
@@ -502,12 +542,18 @@ export default function DashboardTab({
                         <option value="all">الكل</option>
                       </select>
                       {financeRange === 'custom_month' && (
-                        <input
-                          type="month"
-                          value={selectedCustomMonth}
-                          onChange={(e) => setSelectedCustomMonth(e.target.value)}
-                          className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none shadow-sm"
-                        />
+                        <>
+                          <input
+                            type="month"
+                            value={selectedCustomMonth}
+                            onChange={(e) => setSelectedCustomMonth(e.target.value)}
+                            aria-label={cleanMonthOption(formatDashboardMonth(selectedCustomMonth))}
+                            className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none shadow-sm"
+                          />
+                          <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                            {cleanMonthOption(formatDashboardMonth(selectedCustomMonth))}
+                          </span>
+                        </>
                       )}
                     </div>
                   )}

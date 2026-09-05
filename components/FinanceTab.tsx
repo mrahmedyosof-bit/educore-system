@@ -145,6 +145,8 @@ export default function FinanceTab() {
   const [filterGrade, setFilterGrade] = useState('الكل');
   const [filterSubject, setFilterSubject] = useState('كل المواد');
   const [resetPaymentsOpen, setResetPaymentsOpen] = useState(false);
+  const [zeroDebtOpen, setZeroDebtOpen] = useState(false);
+  const [purgeMonthOpen, setPurgeMonthOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [touchedRemaining, setTouchedRemaining] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
@@ -802,6 +804,78 @@ export default function FinanceTab() {
         errorRecord?.error_description ||
         (typeof err === 'string' ? err : JSON.stringify(err));
       showToast({ type: 'error', text: `تعذر إلغاء المدفوعات: ${errorMessage}` });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [filterMonth, filteredPayments, showToast]);
+
+  const handleZeroFilteredMonthDebt = useCallback(async () => {
+    if (filterMonth === 'الكل') {
+      showToast({ type: 'error', text: 'يرجى اختيار شهر قبل إلغاء المديونية.' });
+      return;
+    }
+    if (filteredPayments.length === 0) {
+      showToast({ type: 'error', text: 'لا توجد مدفوعات مطابقة للفلاتر المحددة.' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      for (const payment of filteredPayments) {
+        const { error } = await supabase
+          .from('payments')
+          .update({ amount_remaining: 0 })
+          .eq('id', payment.id);
+        if (error) throw error;
+      }
+      setZeroDebtOpen(false);
+      showToast({
+        type: 'success',
+        text: `تم تصفير المديونية لشهر ${filterMonth} للطلاب المفلترين.`,
+      });
+      await fetchData();
+    } catch (err: unknown) {
+      console.error('Zero Remaining Debt Error Detail:', err);
+      const errorRecord = err as { message?: unknown; error_description?: unknown } | null;
+      const errorMessage =
+        errorRecord?.message ||
+        errorRecord?.error_description ||
+        (typeof err === 'string' ? err : JSON.stringify(err));
+      showToast({ type: 'error', text: `تعذر تصفير المديونية: ${errorMessage}` });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [filterMonth, filteredPayments, showToast]);
+
+  const handlePurgeFilteredMonthPayments = useCallback(async () => {
+    if (filterMonth === 'الكل') {
+      showToast({ type: 'error', text: 'يرجى اختيار شهر قبل حذف السجلات.' });
+      return;
+    }
+    if (filteredPayments.length === 0) {
+      showToast({ type: 'error', text: 'لا توجد مدفوعات مطابقة للفلاتر المحددة.' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const ids = filteredPayments.map((payment) => payment.id);
+      const { error } = await supabase.from('payments').delete().in('id', ids);
+      if (error) throw error;
+      setPurgeMonthOpen(false);
+      showToast({
+        type: 'success',
+        text: `تم حذف سجلات شهر ${filterMonth} للطلاب المفلترين.`,
+      });
+      await fetchData();
+    } catch (err: unknown) {
+      console.error('Purge Month Payments Error Detail:', err);
+      const errorRecord = err as { message?: unknown; error_description?: unknown } | null;
+      const errorMessage =
+        errorRecord?.message ||
+        errorRecord?.error_description ||
+        (typeof err === 'string' ? err : JSON.stringify(err));
+      showToast({ type: 'error', text: `تعذر حذف سجلات الشهر: ${errorMessage}` });
     } finally {
       setIsSubmitting(false);
     }
@@ -1688,6 +1762,22 @@ export default function FinanceTab() {
             >
               إلغاء مدفوعات هذا الشهر
             </button>
+            <button
+              type="button"
+              onClick={() => setZeroDebtOpen(true)}
+              disabled={filterMonth === 'الكل' || filteredPayments.length === 0 || isSubmitting}
+              className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              إلغاء المديونية
+            </button>
+            <button
+              type="button"
+              onClick={() => setPurgeMonthOpen(true)}
+              disabled={filterMonth === 'الكل' || filteredPayments.length === 0 || isSubmitting}
+              className="rounded-xl bg-rose-950 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              حذف سجلات الشهر بالكامل
+            </button>
           </div>
         </div>
         {fetching ? (
@@ -2203,6 +2293,78 @@ export default function FinanceTab() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {zeroDebtOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={() => !isSubmitting && setZeroDebtOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl border border-amber-200 bg-white p-6 shadow-2xl"
+            dir="rtl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-black text-amber-700">إلغاء المديونية</h3>
+            <p className="mt-3 text-sm font-bold leading-7 text-slate-700">
+              هل أنت متأكد من تصفير المديونية المتبقية لشهر {filterMonth}؟ سيتم تعديل المبالغ المتبقية إلى 0 ج.م للطلاب المفلترين.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setZeroDebtOpen(false)}
+                disabled={isSubmitting}
+                className="rounded-2xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleZeroFilteredMonthDebt()}
+                disabled={isSubmitting}
+                className="rounded-2xl bg-amber-500 px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-amber-600 disabled:opacity-50"
+              >
+                {isSubmitting ? 'جاري التصفير...' : 'تأكيد التصفير'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {purgeMonthOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm"
+          onClick={() => !isSubmitting && setPurgeMonthOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl border border-rose-300 bg-white p-6 shadow-2xl"
+            dir="rtl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-black text-rose-800">حذف سجلات الشهر</h3>
+            <p className="mt-3 text-sm font-bold leading-7 text-slate-700">
+              تحذير: سيتم حذف جميع سجلات الاشتراكات لشهر {filterMonth} نهائياً للطلاب المفلترين.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPurgeMonthOpen(false)}
+                disabled={isSubmitting}
+                className="rounded-2xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePurgeFilteredMonthPayments()}
+                disabled={isSubmitting}
+                className="rounded-2xl bg-rose-950 px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-rose-900 disabled:opacity-50"
+              >
+                {isSubmitting ? 'جاري الحذف...' : 'تأكيد الحذف النهائي'}
+              </button>
+            </div>
           </div>
         </div>
       )}
