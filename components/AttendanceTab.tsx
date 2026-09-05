@@ -1464,7 +1464,7 @@ export default function AttendanceTab() {
      7) JSX
   ════════════════════════════════════════════════════════════ */
   return (
-    <div className="w-full space-y-6" dir="rtl">
+    <div className="min-h-0 w-full space-y-6 pb-8" dir="rtl">
       <div className={cardClass}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>

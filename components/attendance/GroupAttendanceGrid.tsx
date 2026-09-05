@@ -71,7 +71,7 @@ export const GroupAttendanceGrid = React.memo(function GroupAttendanceGrid(props
   } = props;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="mt-6 grid grid-cols-1 gap-6 pb-4 lg:grid-cols-2">
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
