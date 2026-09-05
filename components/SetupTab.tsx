@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { useCurriculumSettings } from '@/hooks/useCurriculumSettings';
 import type { CurriculumKey, PriceMatrix, GroupSchedule } from '@/lib/services/settings';
 import { priceKey } from '@/lib/services/settings';
@@ -647,7 +647,8 @@ function CurriculumSection({
 function DangerZone() {
   const [target, setTarget] = useState<ResetTargetKey | 'all'>('all');
   const [confirmation, setConfirmation] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const targetLabel =
@@ -655,29 +656,31 @@ function DangerZone() {
       ? 'كل البيانات (طلاب، حضور، درجات، مدفوعات، مصروفات، اختبارات)'
       : RESET_TARGETS.find((t) => t.key === target)?.label ?? '';
 
-  const canRun = confirmation.trim() === 'مسح' && !busy;
+  const canRun = confirmation.trim() === 'مسح' && !isClearing && !isPending;
 
   const handleReset = async () => {
     if (!window.confirm(`تحذير نهائي: سيتم حذف ${targetLabel} نهائياً ولا يمكن التراجع. متابعة؟`)) {
       return;
     }
 
-    setBusy(true);
+    setIsClearing(true);
     setMessage(null);
-    try {
-      if (target === 'all') await clearAllData();
-      else await clearTable(target);
+    startTransition(async () => {
+      try {
+        if (target === 'all') await clearAllData();
+        else await clearTable(target);
 
-      setMessage({ ok: true, text: `تم مسح ${targetLabel} بنجاح.` });
-      setConfirmation('');
-    } catch (err) {
-      setMessage({
-        ok: false,
-        text: err instanceof Error ? err.message : 'تعذر تنفيذ عملية المسح.',
-      });
-    } finally {
-      setBusy(false);
-    }
+        setMessage({ ok: true, text: `تم مسح ${targetLabel} بنجاح.` });
+        setConfirmation('');
+      } catch (err) {
+        setMessage({
+          ok: false,
+          text: err instanceof Error ? err.message : 'تعذر تنفيذ عملية المسح.',
+        });
+      } finally {
+        setIsClearing(false);
+      }
+    });
   };
 
   return (
@@ -723,7 +726,7 @@ function DangerZone() {
           disabled={!canRun}
           className="rounded-2xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-rose-700 disabled:opacity-40"
         >
-          {busy ? 'جاري المسح...' : `🗑️ مسح ${target === 'all' ? 'الكل' : targetLabel}`}
+          {isClearing || isPending ? 'جاري المسح...' : `🗑️ مسح ${target === 'all' ? 'الكل' : targetLabel}`}
         </button>
       </div>
 
