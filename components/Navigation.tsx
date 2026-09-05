@@ -111,6 +111,11 @@ export function NavProvider({ children }: { children: React.ReactNode }) {
     [currentRole, role]
   );
 
+  const navigationRole = useMemo<TenantRole>(
+    () => (role === 'assistant' ? 'ASSISTANT' : tenantRole),
+    [role, tenantRole]
+  );
+
   const permissions = useMemo<readonly Permission[]>(
     () => ROLE_PERMISSIONS[tenantRole],
     [tenantRole]
@@ -122,8 +127,8 @@ export function NavProvider({ children }: { children: React.ReactNode }) {
   );
 
   const canAccessTab = useCallback(
-    (tabId: string) => canAccessTabForRole(tenantRole, tabId),
-    [tenantRole]
+    (tabId: string) => canAccessTabForRole(navigationRole, tabId),
+    [navigationRole]
   );
 
   const setActiveTab = useCallback(
@@ -293,58 +298,64 @@ export function Sidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto p-3 scrollbar-thin scrollbar-thumb-indigo-900">
-          {visibleGroups.map((group) => (
-            <div key={group.title} className="space-y-1">
-              {collapsed ? (
-                <div className="mx-auto my-2 h-px w-8 bg-indigo-900/50" aria-hidden="true" />
-              ) : (
-                <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-indigo-300/60">
-                  {group.title}
-                </div>
-              )}
-              <div className="space-y-1">
-                {group.tabs.map((tab) => {
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => handleNavigate(tab.id)}
-                      title={collapsed ? tab.label : undefined}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={`
-                        relative flex w-full items-center rounded-xl py-2.5 text-xs font-bold
-                        transition-all duration-200
-                        ${collapsed ? 'justify-center px-0' : 'gap-3 px-3.5'}
-                        ${
-                          isActive
-                            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-600/40 border border-indigo-400/40'
-                            : 'text-indigo-100/70 hover:bg-indigo-900/40 hover:text-white border border-transparent'
-                        }
-                      `}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={`
-                          absolute right-0 top-1/2 -translate-y-1/2 rounded-l-full bg-indigo-300
-                          transition-all duration-200
-                          ${isActive ? 'h-5 w-1 opacity-100' : 'h-0 w-0 opacity-0'}
-                        `}
-                      />
-                      <span className="shrink-0 text-base leading-none">{tab.icon}</span>
-                      {!collapsed && <span className="truncate">{tab.label}</span>}
-                    </button>
-                  );
-                })}
-              </div>
+        <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 scrollbar-thin scrollbar-thumb-indigo-900">
+          {visibleGroups.length === 0 ? (
+            <div className="rounded-xl border border-indigo-800/40 bg-indigo-950/40 p-3 text-center text-[11px] font-bold text-indigo-200/70">
+              لا توجد أقسام متاحة لهذا الدور
             </div>
-          ))}
+          ) : (
+            visibleGroups.map((group) => (
+              <div key={group.title} className="space-y-1">
+                {collapsed ? (
+                  <div className="mx-auto my-2 h-px w-8 bg-indigo-900/50" aria-hidden="true" />
+                ) : (
+                  <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-indigo-300/60">
+                    {group.title}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {group.tabs.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleNavigate(tab.id)}
+                        title={collapsed ? tab.label : undefined}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={`
+                          relative flex w-full items-center rounded-xl py-2.5 text-xs font-bold
+                          transition-all duration-200
+                          ${collapsed ? 'justify-center px-0' : 'gap-3 px-3.5'}
+                          ${
+                            isActive
+                              ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-600/40 border border-indigo-400/40'
+                              : 'text-indigo-100/70 hover:bg-indigo-900/40 hover:text-white border border-transparent'
+                          }
+                        `}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`
+                            absolute right-0 top-1/2 -translate-y-1/2 rounded-l-full bg-indigo-300
+                            transition-all duration-200
+                            ${isActive ? 'h-5 w-1 opacity-100' : 'h-0 w-0 opacity-0'}
+                          `}
+                        />
+                        <span className="shrink-0 text-base leading-none">{tab.icon}</span>
+                        {!collapsed && <span className="truncate">{tab.label}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </nav>
 
         <div
           className={`
-            border-t border-indigo-800/30 bg-slate-950/60 backdrop-blur-md p-3.5
+            shrink-0 border-t border-indigo-800/30 bg-slate-950/60 backdrop-blur-md p-3.5
             ${collapsed ? 'px-2 text-center' : ''}
           `}
         >
