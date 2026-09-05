@@ -45,6 +45,7 @@ const cleanMonthOption = (value: unknown): string => {
     })
     .replace(/[\u064B-\u065F\u0670]/g, '')
     .replace(/[أإآ]/g, 'ا')
+    .replace(/[,،\-_\.]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 };
