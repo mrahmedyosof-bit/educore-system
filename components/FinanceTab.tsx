@@ -31,6 +31,21 @@ export type Student = BaseStudent;
 const formatCurrency = (amount: number): string =>
   `${Math.round(amount).toLocaleString('ar-EG')} ج.م`;
 
+const normalizeMonthString = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const westernDigits = value.replace(/[٠-٩۰-۹]/g, (digit) => {
+    const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+    const easternIndic = '۰۱۲۳۴۵۶۷۸۹';
+    const index = arabicIndic.indexOf(digit);
+    return String(index >= 0 ? index : easternIndic.indexOf(digit));
+  });
+  return westernDigits
+    .normalize('NFKC')
+    .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 // تهريب قيم النصوص قبل حقنها في نوافذ الطباعة (document.write)
 const escapeHtml = (value: unknown): string =>
   String(value ?? '')
@@ -214,13 +229,14 @@ export default function FinanceTab() {
         setPayments(
           loadedPayments.map((payment): PaymentRecord => ({
             ...payment,
+            month_name: normalizeMonthString(payment.month_name),
             student: payment.student_id
               ? studentsByIdMap.get(payment.student_id)
               : undefined,
           }))
         );
         setFetching(false);
-        setMonthName(getCurrentMonthName());
+        setMonthName(normalizeMonthString(getCurrentMonthName()));
       } catch (err: unknown) {
         if (!cancelled) {
           console.error('Error fetching data:', err);
@@ -253,6 +269,7 @@ export default function FinanceTab() {
       setPayments(
         loadedPayments.map((payment): PaymentRecord => ({
           ...payment,
+          month_name: normalizeMonthString(payment.month_name),
           student: payment.student_id
             ? studentsByIdMap.get(payment.student_id)
             : undefined,
@@ -307,7 +324,7 @@ export default function FinanceTab() {
       const duplicateSubscription = payments.some(
         (payment) => editingPaymentId === null &&
           payment.student_id === studentId &&
-          payment.month_name === monthName.trim() &&
+          normalizeMonthString(payment.month_name) === normalizeMonthString(monthName) &&
           (!payment.academic_year || payment.academic_year === centerSettings.academicYear)
       );
       if (duplicateSubscription) {
@@ -319,7 +336,7 @@ export default function FinanceTab() {
         amount_remaining: editingPaymentId === null && selectedDue !== undefined
           ? Math.max(0, selectedDue - paid)
           : remaining,
-        month_name: monthName.trim(),
+        month_name: normalizeMonthString(monthName),
         academic_year: centerSettings.academicYear,
       };
       const isUpdate = editingPaymentId !== null;
@@ -372,7 +389,7 @@ export default function FinanceTab() {
     setSelectedSubjectId(payment.student?.subject || '');
     setAmountPaid(String(payment.amount_paid));
     setAmountRemaining(String(payment.amount_remaining ?? 0));
-    setMonthName(payment.month_name);
+    setMonthName(normalizeMonthString(payment.month_name));
     setTouchedRemaining(false);
     document.getElementById('payment-form')?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -398,7 +415,8 @@ export default function FinanceTab() {
         s.subject === bulkPaymentSubject
       );
       const existingPayments = payments.filter(p =>
-        p.month_name === bulkPaymentMonth && groupStudents.some(gs => gs.id === p.student_id)
+        normalizeMonthString(p.month_name) === normalizeMonthString(bulkPaymentMonth) &&
+        groupStudents.some(gs => gs.id === p.student_id)
       );
       const studentsWithPaymentInfo = groupStudents.map(student => {
         const existingPayment = existingPayments.find(p => p.student_id === student.id);
@@ -487,7 +505,7 @@ export default function FinanceTab() {
           student_id: sp.student.id,
           amount_paid: sp.amountPaid,
           amount_remaining: sp.amountRemaining,
-          month_name: bulkPaymentMonth.trim(),
+          month_name: normalizeMonthString(bulkPaymentMonth),
           academic_year: centerSettings.academicYear,
         };
         if (sp.hasPayment && sp.existingPaymentId) {
@@ -530,7 +548,7 @@ export default function FinanceTab() {
     setBulkPaymentGroup('');
     setBulkPaymentSubject('');
     setBulkPaymentStudents([]);
-    setBulkPaymentMonth(getCurrentMonthName());
+    setBulkPaymentMonth(normalizeMonthString(getCurrentMonthName()));
   }, []);
 
   const closeBulkPaymentModal = useCallback(() => {
@@ -632,7 +650,9 @@ export default function FinanceTab() {
   }, [editingId, handleCancelEdit, formData.name, formData.grade, formData.subject, formData.group]);
 
   const monthOptions = useMemo(
-    () => Array.from(new Set(payments.map((p) => p.month_name).filter(Boolean))),
+    () => Array.from(
+      new Set(payments.map((p) => normalizeMonthString(p.month_name)).filter(Boolean))
+    ),
     [payments]
   );
 
@@ -645,7 +665,7 @@ export default function FinanceTab() {
   }, [students]);
 
   const formSubjects = useMemo(() => subjects.filter((s) => s !== 'الكل'), [subjects]);
-  const currentMonth = useMemo(() => getCurrentMonthName(), []);
+  const currentMonth = useMemo(() => normalizeMonthString(getCurrentMonthName()), []);
   const todayDate = useMemo(() => getTodayDateISO(), []);
   const subscriptionMonthOptions = useMemo(() => {
     const academicYearStart = Number(centerSettings.academicYear.slice(0, 4));
@@ -660,7 +680,7 @@ export default function FinanceTab() {
     return Array.from({ length: 12 }, (_, index) => {
       const monthIndex = (8 + index) % 12;
       const year = monthIndex >= 8 ? startYear : startYear + 1;
-      return `${monthNames[monthIndex]} ${year}`;
+      return normalizeMonthString(`${monthNames[monthIndex]} ${year}`);
     });
   }, [centerSettings.academicYear]);
 
@@ -677,7 +697,10 @@ export default function FinanceTab() {
   const paymentsWithStatus = useMemo(() => {
     return payments.map(payment => {
       const remaining = Number(payment.amount_remaining ?? 0);
-      const { isCurrent, isPast, isFuture } = getMonthStatus(payment.month_name, currentMonth);
+      const { isCurrent, isPast, isFuture } = getMonthStatus(
+        normalizeMonthString(payment.month_name),
+        currentMonth
+      );
       let statusType: 'paid' | 'overdue' | 'due' | 'future' = 'due';
       let statusText = '';
       if (remaining <= 0) {
@@ -710,7 +733,9 @@ export default function FinanceTab() {
 
   const filteredPayments = useMemo(
     () => paymentsWithStatus.filter((p) => {
-      const monthMatch = filterMonth === 'الكل' || p.month_name === filterMonth;
+      const monthMatch =
+        filterMonth === 'الكل' ||
+        normalizeMonthString(p.month_name) === normalizeMonthString(filterMonth);
       const gradeMatch = filterGrade === 'الكل' || p.student?.grade === filterGrade;
       const subjectMatch = filterSubject === 'كل المواد' || p.student?.subject === filterSubject;
       return monthMatch && gradeMatch && subjectMatch;
@@ -744,7 +769,9 @@ export default function FinanceTab() {
   const financialSummary = useMemo(
     () => calculateFinancialSummary(
       expectedMonthlyIncome,
-      currentAcademicYearPayments.filter((payment) => payment.month_name === currentMonth)
+      currentAcademicYearPayments.filter(
+        (payment) => normalizeMonthString(payment.month_name) === currentMonth
+      )
     ),
     [expectedMonthlyIncome, currentAcademicYearPayments, currentMonth]
   );
@@ -755,7 +782,9 @@ export default function FinanceTab() {
 
   const paidStudentsCurrentMonth = useMemo(() => {
     return payments
-      .filter((p) => p.month_name === currentMonth && Number(p.amount_paid || 0) > 0)
+      .filter(
+        (p) => normalizeMonthString(p.month_name) === currentMonth && Number(p.amount_paid || 0) > 0
+      )
       .map((p) => ({
         ...p,
         studentName: p.student?.name || 'طالب محذوف',
@@ -1445,7 +1474,7 @@ export default function FinanceTab() {
                   const studentDue = Math.max(0, studentPrice - toFiniteAmount(student.discountAmount));
                   const existingPayment = payments.find(p =>
                     p.student_id === student.id &&
-                    p.month_name === monthName.trim() &&
+                    normalizeMonthString(p.month_name) === normalizeMonthString(monthName) &&
                     (!p.academic_year || p.academic_year === centerSettings.academicYear)
                   );
                   const paidAmount = existingPayment ? toFiniteAmount(existingPayment.amount_paid) : 0;
