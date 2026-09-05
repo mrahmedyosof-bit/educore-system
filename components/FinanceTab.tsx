@@ -131,7 +131,6 @@ export default function FinanceTab() {
   const [formData, setFormData] = useState<StudentFormData>(INITIAL_FORM_DATA);
   const [selectedStage, setSelectedStage] = useState<string>('');
   const [selectedGrade, setSelectedGrade] = useState<string>('');
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('');
   const [amountPaid, setAmountPaid] = useState<string>('');
   const [amountRemaining, setAmountRemaining] = useState<string>('');
   const [discountType, setDiscountType] = useState<'amount' | 'percentage'>('amount');
@@ -821,15 +820,6 @@ export default function FinanceTab() {
     return Array.from(unique).sort();
   }, [uniqueStudents, selectedStage]);
 
-  const subjectsForGrade = useMemo(() => {
-    if (!selectedGrade) return [];
-    const unique = new Set<string>();
-    uniqueStudents.forEach((s) => {
-      if (s.grade === selectedGrade && s.subject) unique.add(s.subject);
-    });
-    return Array.from(unique).sort();
-  }, [uniqueStudents, selectedGrade]);
-
   const bulkStages = useMemo(() => {
     const unique = new Set<string>();
     uniqueStudents.forEach((s) => {
@@ -882,10 +872,9 @@ export default function FinanceTab() {
     return uniqueStudents.filter((s) => {
       const stageMatch = !selectedStage || s.stage === selectedStage;
       const gradeMatch = !selectedGrade || s.grade === selectedGrade;
-      const subjectMatch = !selectedSubjectFilter || s.subject === selectedSubjectFilter;
-      return stageMatch && gradeMatch && subjectMatch;
+      return stageMatch && gradeMatch;
     });
-  }, [uniqueStudents, selectedStage, selectedGrade, selectedSubjectFilter]);
+  }, [uniqueStudents, selectedStage, selectedGrade]);
 
   const printLastPaymentReceipt = useCallback(() => {
     if (!lastPayment) return;
@@ -1146,9 +1135,10 @@ export default function FinanceTab() {
             e.preventDefault();
             e.currentTarget.requestSubmit();
           }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"
+          className="space-y-4"
         >
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             المرحلة الدراسية
             <select
               value={selectedStage}
@@ -1156,7 +1146,6 @@ export default function FinanceTab() {
                 const val = e.target.value;
                 setSelectedStage(val);
                 setSelectedGrade('');
-                setSelectedSubjectFilter('');
                 setSelectedSubjectId('');
                 setSelectedStudentId('');
                 setTouchedRemaining(false);
@@ -1170,15 +1159,14 @@ export default function FinanceTab() {
                 <option key={stage} value={stage}>{stage}</option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             الصف الدراسي
             <select
               value={selectedGrade}
               onChange={(e) => {
                 const val = e.target.value;
                 setSelectedGrade(val);
-                setSelectedSubjectFilter('');
                 setSelectedSubjectId('');
                 setSelectedStudentId('');
                 setTouchedRemaining(false);
@@ -1193,27 +1181,8 @@ export default function FinanceTab() {
                 <option key={grade} value={grade}>{grade}</option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
-            المادة / الكورس (للتصفية)
-            <select
-              value={selectedSubjectFilter}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedSubjectFilter(val);
-                setSelectedStudentId('');
-                setTouchedRemaining(false);
-              }}
-              disabled={!selectedGrade}
-              className={INPUT_CLASS}
-            >
-              <option value="">-- اختر الصف أولاً --</option>
-              {subjectsForGrade.map((subj) => (
-                <option key={subj} value={subj}>{subj}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             اختر الطالب *
             <select
               value={selectedStudentId}
@@ -1247,8 +1216,8 @@ export default function FinanceTab() {
                 </option>
               ))}
             </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             المادة / الكورس *
             <select
               value={selectedSubjectId}
@@ -1280,8 +1249,27 @@ export default function FinanceTab() {
                 💡 الاشتراك المعتمد من شبكة الأسعار: {formatCurrency(selectedPrice)}
               </span>
             )}
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+              شهر الاشتراك *
+              <select
+                value={monthName}
+                onChange={(e) => setMonthName(e.target.value)}
+                required
+                className={INPUT_CLASS}
+              >
+                <option value="">-- اختر شهر --</option>
+                {subscriptionMonthOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             سعر الاشتراك (ج.م)
             <input
               type="number"
@@ -1290,15 +1278,15 @@ export default function FinanceTab() {
               tabIndex={-1}
               className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}
             />
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             نوع الخصم
             <select value={discountType} disabled className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}>
               <option value="amount">خصم مبلغ</option>
               <option value="percentage">خصم نسبة مئوية</option>
             </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             قيمة الخصم (ج.م)
             <input
               type="number"
@@ -1307,8 +1295,8 @@ export default function FinanceTab() {
               tabIndex={-1}
               className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}
             />
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             المبلغ المستحق (ج.م)
             <input
               type="number"
@@ -1317,53 +1305,64 @@ export default function FinanceTab() {
               tabIndex={-1}
               className={`${INPUT_CLASS} cursor-not-allowed bg-indigo-50 font-black text-indigo-700`}
             />
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
-            شهر الاشتراك *
-            <select
-              value={monthName}
-              onChange={(e) => setMonthName(e.target.value)}
-              required
-              className={INPUT_CLASS}
-            >
-              <option value="">-- اختر شهر --</option>
-              {subscriptionMonthOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
             المبلغ المدفوع (ج.م) *
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={amountPaid}
-              onChange={(e) => {
-                setAmountPaid(e.target.value);
-                applyAutoRemaining(e.target.value, selectedDue);
-              }}
-              placeholder="0.00"
-              required
-              className={INPUT_CLASS}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
-            المبلغ المتبقي (ج.م)
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={amountRemaining}
-              readOnly
-              tabIndex={-1}
-              placeholder="يُحسب تلقائياً = المستحق − المدفوع"
-              className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}
-            />
-          </label>
-          <div className="md:col-span-2 lg:col-span-3 flex justify-end gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={amountPaid}
+                  onChange={(e) => {
+                    setAmountPaid(e.target.value);
+                    applyAutoRemaining(e.target.value, selectedDue);
+                  }}
+                  placeholder="0.00"
+                  required
+                  className={`${INPUT_CLASS} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const due = selectedDue ?? 0;
+                    setAmountPaid(String(due));
+                    setAmountRemaining('0');
+                  }}
+                  disabled={selectedDue === undefined}
+                  className="shrink-0 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  دفعة كاملة
+                </button>
+              </div>
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-600">
+              <span className="flex items-center justify-between gap-2">
+                <span>المبلغ المتبقي (ج.م)</span>
+                <span
+                  className={`rounded-lg px-2 py-1 text-[10px] font-black ${
+                    toFiniteAmount(amountRemaining) === 0
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-amber-50 text-amber-700'
+                  }`}
+                >
+                  {toFiniteAmount(amountRemaining) === 0 ? 'مسدد بالكامل' : 'دفعة جزئية'}
+                </span>
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={amountRemaining}
+                readOnly
+                tabIndex={-1}
+                placeholder="يُحسب تلقائياً = المستحق − المدفوع"
+                className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}
+              />
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={openBulkPaymentModal}
