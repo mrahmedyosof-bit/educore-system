@@ -144,6 +144,7 @@ export default function FinanceTab() {
   const [filterMonth, setFilterMonth] = useState('الكل');
   const [filterGrade, setFilterGrade] = useState('الكل');
   const [filterSubject, setFilterSubject] = useState('كل المواد');
+  const [quickCollectionSearch, setQuickCollectionSearch] = useState('');
   const [resetPaymentsOpen, setResetPaymentsOpen] = useState(false);
   const [zeroDebtOpen, setZeroDebtOpen] = useState(false);
   const [purgeMonthOpen, setPurgeMonthOpen] = useState(false);
@@ -1102,6 +1103,25 @@ export default function FinanceTab() {
     });
   }, [uniqueStudents, selectedStage, selectedGrade]);
 
+  const quickCollectionStudents = useMemo(() => {
+    const query = quickCollectionSearch.trim().toLowerCase();
+    if (!query) return filteredStudentsForSelect;
+
+    return filteredStudentsForSelect.filter((student) => {
+      const searchableValues = [
+        student.name,
+        student.phone,
+        student.parent_phone,
+        student.barcode,
+        student.student_code,
+        String(student.id),
+      ];
+      return searchableValues.some((value) =>
+        String(value ?? '').toLowerCase().includes(query)
+      );
+    });
+  }, [filteredStudentsForSelect, quickCollectionSearch]);
+
   const printLastPaymentReceipt = useCallback(() => {
     if (!lastPayment) return;
     const student = studentsById.get(lastPayment.studentId);
@@ -1647,9 +1667,40 @@ export default function FinanceTab() {
             </select>
           </div>
         </div>
-        {filteredStudentsForSelect.length === 0 ? (
+        <div className="border-b border-slate-100 p-4 dark:border-slate-700">
+          <div className="relative max-w-xl">
+            <input
+              type="search"
+              value={quickCollectionSearch}
+              onChange={(e) => setQuickCollectionSearch(e.target.value)}
+              placeholder="بحث سريع (اسم الطالب، رقم الهاتف، أو كود/باركود الطالب)..."
+              aria-label="بحث سريع في طلاب التحصيل"
+              className={`${INPUT_CLASS} pe-10 ${quickCollectionSearch ? 'pe-20' : ''}`}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400"
+            >
+              🔎
+            </span>
+            {quickCollectionSearch && (
+              <button
+                type="button"
+                onClick={() => setQuickCollectionSearch('')}
+                aria-label="مسح البحث"
+                title="مسح البحث"
+                className="absolute inset-y-0 left-2 my-auto flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        {quickCollectionStudents.length === 0 ? (
           <div className="p-12 text-center text-xs font-bold text-slate-400">
-            لا توجد طلاب مطابقين للفلاتر الحالية. يرجى اختيار المرحلة والصف والمادة.
+            {quickCollectionSearch.trim()
+              ? 'لا توجد طلاب مطابقة لعبارة البحث الحالية.'
+              : 'لا توجد طلاب مطابقين للفلاتر الحالية. يرجى اختيار المرحلة والصف والمادة.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1666,7 +1717,7 @@ export default function FinanceTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {filteredStudentsForSelect.map((student) => {
+                {quickCollectionStudents.map((student) => {
                   const studentPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
                   const studentDue = Math.max(0, studentPrice - toFiniteAmount(student.discountAmount));
                   const existingPayment = payments.find(p =>
