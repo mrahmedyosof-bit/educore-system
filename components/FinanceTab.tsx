@@ -8,6 +8,7 @@ import {
 } from '@/lib/services/payments';
 import { getStudents, getUniqueStudents, Student as BaseStudent } from '@/lib/services/students';
 import { getPriceMatrix, priceKey, type PriceMatrix } from '@/lib/services/settings';
+import { supabase } from '@/lib/supabase';
 import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
 import WhatsAppButton from './WhatsAppButton';
 import { emitPaymentUpdate } from '@/lib/events';
@@ -758,29 +759,31 @@ export default function FinanceTab() {
   );
 
   const handleResetFilteredMonthPayments = useCallback(async () => {
-    if (filterMonth === 'الكل' || filteredPayments.length === 0) return;
+    if (filterMonth === 'الكل') {
+      showToast({ type: 'error', text: 'يرجى اختيار شهر قبل إلغاء المدفوعات.' });
+      return;
+    }
+    if (filteredPayments.length === 0) {
+      showToast({ type: 'error', text: 'لا توجد مدفوعات مطابقة للفلاتر المحددة.' });
+      return;
+    }
 
     setIsSubmitting(true);
     setMessage(null);
     try {
-      await Promise.all(
-        filteredPayments.map((payment) => {
-          if (!payment.student_id) {
-            throw new Error('يوجد سجل دفع بدون طالب مرتبط.');
-          }
-
-          const paid = toFiniteAmount(payment.amount_paid);
-          const remaining = toFiniteAmount(payment.amount_remaining);
-          return updatePayment(payment.id, {
-            student_id: payment.student_id,
+      for (const payment of filteredPayments) {
+        const paid = toFiniteAmount(payment.amount_paid);
+        const remaining = toFiniteAmount(payment.amount_remaining);
+        const { error } = await supabase
+          .from('payments')
+          .update({
             amount_paid: 0,
             amount_remaining: paid + remaining,
-            month_name: cleanMonthOption(payment.month_name),
-            academic_year: payment.academic_year,
-            payment_date: payment.payment_date,
-          });
-        })
-      );
+          })
+          .eq('id', payment.id);
+
+        if (error) throw error;
+      }
 
       setResetPaymentsOpen(false);
       showToast({
@@ -789,8 +792,16 @@ export default function FinanceTab() {
       });
       await fetchData();
     } catch (err: unknown) {
-      const errorText = err instanceof Error ? err.message : 'خطأ غير معروف';
-      showToast({ type: 'error', text: `تعذر إلغاء المدفوعات: ${errorText}` });
+      console.error('Reset Payments Error Detail:', err);
+      const errorRecord = err as {
+        message?: unknown;
+        error_description?: unknown;
+      } | null;
+      const errorMessage =
+        errorRecord?.message ||
+        errorRecord?.error_description ||
+        (typeof err === 'string' ? err : JSON.stringify(err));
+      showToast({ type: 'error', text: `تعذر إلغاء المدفوعات: ${errorMessage}` });
     } finally {
       setIsSubmitting(false);
     }
