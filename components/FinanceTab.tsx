@@ -144,7 +144,7 @@ export default function FinanceTab() {
   const [filterGrade, setFilterGrade] = useState('الكل');
   const [filterSubject, setFilterSubject] = useState('كل المواد');
   const [resetPaymentsOpen, setResetPaymentsOpen] = useState(false);
-  const [resetPaymentsLoading, setResetPaymentsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [touchedRemaining, setTouchedRemaining] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
@@ -760,7 +760,7 @@ export default function FinanceTab() {
   const handleResetFilteredMonthPayments = useCallback(async () => {
     if (filterMonth === 'الكل' || filteredPayments.length === 0) return;
 
-    setResetPaymentsLoading(true);
+    setIsSubmitting(true);
     setMessage(null);
     try {
       await Promise.all(
@@ -783,18 +783,18 @@ export default function FinanceTab() {
       );
 
       setResetPaymentsOpen(false);
-      setMessage({
+      showToast({
         type: 'success',
         text: `تم إلغاء مدفوعات شهر ${filterMonth} للطلاب المفلترين.`,
       });
       await fetchData();
     } catch (err: unknown) {
       const errorText = err instanceof Error ? err.message : 'خطأ غير معروف';
-      setMessage({ type: 'error', text: `تعذر إلغاء المدفوعات: ${errorText}` });
+      showToast({ type: 'error', text: `تعذر إلغاء المدفوعات: ${errorText}` });
     } finally {
-      setResetPaymentsLoading(false);
+      setIsSubmitting(false);
     }
-  }, [filterMonth, filteredPayments]);
+  }, [filterMonth, filteredPayments, showToast]);
 
   const payingStudents = useMemo(() => {
     return uniqueStudents.filter((s) => s.grade && s.subject && !s.isExempt);
@@ -1672,7 +1672,7 @@ export default function FinanceTab() {
             <button
               type="button"
               onClick={() => setResetPaymentsOpen(true)}
-              disabled={filterMonth === 'الكل' || filteredPayments.length === 0 || resetPaymentsLoading}
+              disabled={filterMonth === 'الكل' || filteredPayments.length === 0 || isSubmitting}
               className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               إلغاء مدفوعات هذا الشهر
@@ -2199,7 +2199,7 @@ export default function FinanceTab() {
       {resetPaymentsOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
-          onClick={() => !resetPaymentsLoading && setResetPaymentsOpen(false)}
+          onClick={() => !isSubmitting && setResetPaymentsOpen(false)}
         >
           <div
             className="w-full max-w-lg rounded-3xl border border-rose-200 bg-white p-6 shadow-2xl"
@@ -2214,7 +2214,7 @@ export default function FinanceTab() {
               <button
                 type="button"
                 onClick={() => setResetPaymentsOpen(false)}
-                disabled={resetPaymentsLoading}
+                disabled={isSubmitting}
                 className="rounded-2xl bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
               >
                 إلغاء
@@ -2222,10 +2222,10 @@ export default function FinanceTab() {
               <button
                 type="button"
                 onClick={() => void handleResetFilteredMonthPayments()}
-                disabled={resetPaymentsLoading}
+                disabled={isSubmitting}
                 className="rounded-2xl bg-rose-600 px-5 py-2.5 text-xs font-extrabold text-white transition hover:bg-rose-700 disabled:opacity-50"
               >
-                {resetPaymentsLoading ? 'جاري الإلغاء...' : 'تأكيد الإلغاء'}
+                {isSubmitting ? 'جاري الإلغاء...' : 'تأكيد الإلغاء'}
               </button>
             </div>
           </div>
