@@ -505,6 +505,28 @@ export async function updateStudent(
   const numericId =
     validateStudentId(id);
 
+  const groupValue = data.group_name ?? data.group;
+  if (data.name && data.subject && groupValue) {
+    const { data: existing, error: checkError } = await supabase
+      .from('students')
+      .select('id')
+      .eq('name', data.name.trim())
+      .eq('subject', data.subject.trim())
+      .eq('group_name', String(groupValue).trim())
+      .neq('id', numericId)
+      .maybeSingle();
+
+    if (checkError) {
+      logSupabaseError('UPDATE DUPLICATE CHECK ERROR:', checkError);
+    } else if (existing) {
+      const duplicateError = new Error(
+        'تعذر الحفظ: يوجد طالب آخر بنفس الاسم مسجل بالفعل في هذه المجموعة والمادة.'
+      );
+      (duplicateError as Error & { code?: string }).code = '23505';
+      throw duplicateError;
+    }
+  }
+
   const row = toRow(data);
 
   const { error } = await supabase

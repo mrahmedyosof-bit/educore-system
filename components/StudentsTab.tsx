@@ -433,8 +433,16 @@ export default function StudentsTab() {
       resetForm();
       setFormOpen(false);
       showToast({ type: 'success', text: 'تم حفظ بيانات الطالب بنجاح!' });
-    } catch (err) {
-      showToast({ type: 'error', text: getFriendlyErrorMessage(err, 'تعذر حفظ بيانات الطالب.') });
+    } catch (err: unknown) {
+      const errorCode = (err as { code?: string } | null)?.code;
+      if (errorCode === '23505') {
+        showToast({
+          type: 'error',
+          text: 'تعذر الحفظ: يوجد طالب آخر بنفس الاسم مسجل بالفعل في هذه المجموعة والمادة.',
+        });
+      } else {
+        showToast({ type: 'error', text: getFriendlyErrorMessage(err, 'تعذر حفظ بيانات الطالب.') });
+      }
     }
   };
 
