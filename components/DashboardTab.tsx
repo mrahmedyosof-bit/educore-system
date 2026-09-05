@@ -204,6 +204,17 @@ export default function DashboardTab({
 
       const allStudentsData = await getStudents();
       const priceMatrix = await getPriceMatrix();
+      const eligibleStudentIds = new Set(
+        allStudentsData
+          .filter((student) => {
+            if (student.isExempt || !student.grade || !student.subject) return false;
+            const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
+            const discount = Number(student.discountAmount ?? 0);
+            const finalFee = Math.max(0, price - (Number.isFinite(discount) ? discount : 0));
+            return Number.isFinite(price) && finalFee > 0;
+          })
+          .map((student) => student.id)
+      );
       let expectedTotal = 0;
       allStudentsData.forEach((student) => {
         if (student.grade && student.subject && !student.isExempt) {
@@ -240,7 +251,7 @@ export default function DashboardTab({
       if (paymentsError) throw paymentsError;
 
       const paymentsWithRemaining = (paymentsData ?? []).filter(
-        (p) => Number(p.amount_remaining) > 0
+        (p) => p.student_id != null && eligibleStudentIds.has(p.student_id) && Number(p.amount_remaining) > 0
       );
 
       const studentIds = [...new Set(paymentsWithRemaining.map((p) => p.student_id).filter(Boolean))];
@@ -265,9 +276,11 @@ export default function DashboardTab({
         const paid = Number(p.amount_paid) || 0;
         const remaining = Number(p.amount_remaining) || 0;
         sumCollected += paid;
-        sumRemaining += remaining;
+        if (p.student_id != null && eligibleStudentIds.has(p.student_id)) {
+          sumRemaining += remaining;
+        }
 
-        if (remaining > 0 && p.student_id != null) {
+        if (remaining > 0 && p.student_id != null && eligibleStudentIds.has(p.student_id)) {
           const studentData = studentsMap.get(p.student_id);
           if (studentData) {
             if (!dueMap[p.student_id]) {
