@@ -210,6 +210,12 @@ export default function FinanceTab() {
       : Math.max(0, selectedPrice - selectedDiscountAmount)
   ), [selectedPrice, selectedDiscountAmount]);
 
+  const getStudentFinalFee = useCallback((student: Student): number => {
+    if (student.isExempt || !student.grade || !student.subject) return 0;
+    const price = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
+    return Math.max(0, price - Math.max(0, toFiniteAmount(student.discountAmount)));
+  }, [priceMatrix]);
+
   const applyAutoRemaining = (paidRaw: string, due: number | undefined) => {
     if (due === undefined || touchedRemaining) return;
     const paid = Number(paidRaw);
@@ -419,9 +425,10 @@ export default function FinanceTab() {
       student.stage === bulkPaymentStage &&
       student.grade === bulkPaymentGrade &&
       student.group_name === bulkPaymentGroup &&
-      student.subject === bulkPaymentSubject
+      student.subject === bulkPaymentSubject &&
+      getStudentFinalFee(student) > 0
     ),
-    [students, bulkPaymentStage, bulkPaymentGrade, bulkPaymentGroup, bulkPaymentSubject]
+    [students, bulkPaymentStage, bulkPaymentGrade, bulkPaymentGroup, bulkPaymentSubject, getStudentFinalFee]
   );
 
   const bulkPaymentRows = useMemo(() => {
@@ -439,7 +446,7 @@ export default function FinanceTab() {
 
     return bulkGroupStudents.map((student) => {
       const existingPayment = existingPaymentsByStudent.get(student.id);
-      const defaultPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
+      const defaultPrice = getStudentFinalFee(student);
       return {
         student,
         amountPaid: existingPayment ? Number(existingPayment.amount_paid || 0) : 0,
@@ -449,7 +456,7 @@ export default function FinanceTab() {
         existingPaymentId: existingPayment?.id,
       };
     });
-  }, [bulkGroupStudents, bulkPaymentMonth, payments, priceMatrix]);
+  }, [bulkGroupStudents, bulkPaymentMonth, payments, getStudentFinalFee]);
 
   const bulkPaymentTotals = useMemo(
     () => bulkPaymentStudents.reduce(
@@ -554,6 +561,9 @@ export default function FinanceTab() {
     setMessage(null);
     try {
       for (const sp of bulkPaymentStudents) {
+        const finalFee = getStudentFinalFee(sp.student);
+        if (finalFee <= 0) continue;
+
         const paymentInput = {
           student_id: sp.student.id,
           amount_paid: sp.amountPaid,
@@ -563,7 +573,7 @@ export default function FinanceTab() {
         };
         if (sp.hasPayment && sp.existingPaymentId) {
           await updatePayment(sp.existingPaymentId, paymentInput);
-        } else if (sp.amountPaid > 0 || sp.amountRemaining < sp.defaultPrice) {
+        } else if (sp.amountPaid > 0 || sp.amountRemaining < finalFee) {
           await addPayment(paymentInput);
         }
       }
@@ -594,7 +604,7 @@ export default function FinanceTab() {
     } finally {
       setBulkPaymentLoading(false);
     }
-  }, [bulkPaymentStudents, bulkPaymentMonth, centerSettings.academicYear, showToast, playSuccessSound]);
+  }, [bulkPaymentStudents, bulkPaymentMonth, centerSettings.academicYear, getStudentFinalFee, showToast, playSuccessSound]);
 
   const openBulkPaymentModal = useCallback(() => {
     setShowBulkPaymentModal(true);
