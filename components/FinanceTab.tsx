@@ -1055,6 +1055,7 @@ export default function FinanceTab() {
         studentName: p.student?.name || 'طالب محذوف',
         grade: p.student?.grade || '-',
         subject: p.student?.subject || '-',
+        targetMonth: cleanMonthOption(p.month_name) || '-',
         paidAmount: Number(p.amount_paid || 0),
         paymentTime: p.created_at ? new Date(p.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '-',
       }))
@@ -2272,6 +2273,7 @@ export default function FinanceTab() {
                       <th className="p-3 font-bold">اسم الطالب</th>
                       <th className="p-3 font-bold">الصف</th>
                       <th className="p-3 font-bold">المادة</th>
+                      <th className="p-3 text-center font-bold">الشهر المستهدف</th>
                       <th className="p-3 font-bold">المبلغ المسدد</th>
                       <th className="p-3 font-bold">وقت السداد</th>
                       <th className="p-3 font-bold">الحالة</th>
@@ -2283,6 +2285,11 @@ export default function FinanceTab() {
                         <td className="p-3 font-bold text-slate-800">{p.studentName}</td>
                         <td className="p-3 text-slate-600">{p.grade}</td>
                         <td className="p-3 text-slate-600">{p.subject}</td>
+                        <td className="p-3 text-center">
+                          <span className="rounded-lg bg-blue-50 px-2.5 py-1 font-bold text-blue-700">
+                            {p.targetMonth}
+                          </span>
+                        </td>
                         <td className="p-3 font-bold text-amber-600">{formatCurrency(p.paidAmount)}</td>
                         <td className="p-3 text-slate-600">{p.paymentTime}</td>
                         <td className="p-3">
