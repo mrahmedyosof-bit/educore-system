@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getUniqueStudentsCount, getUniqueStudents } from '@/lib/services/students';
+import { getPriceMatrix, priceKey } from '@/lib/services/settings';
+import { calculateNetAmountDue, calculateRemainingAmount, toFiniteAmount } from '@/lib/calculations';
 
 interface Student {
   id?: number;
@@ -12,12 +14,16 @@ interface Student {
   group_name?: string;
   grade_level?: string;
   due_amount?: number;
+  grade?: string;
+  subject?: string;
+  discountAmount?: number;
+  isExempt?: boolean;
 }
 
 interface PaymentRow {
   student_id: number;
   amount_paid: number | null;
-  amount_remaining: number | null;
+  month_name: string | null;
 }
 
 type FinanceRangeType =
@@ -33,6 +39,7 @@ export default function ReportsTab() {
   const [financeRange, setFinanceRange] = useState<FinanceRangeType>('month');
   const [tableFilter, setTableFilter] = useState<'all_students' | 'debtors' | 'paid_fully'>('all_students');
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [priceMatrix, setPriceMatrix] = useState<Record<string, number>>({});
   const [uniqueCount, setUniqueCount] = useState<number>(0);
 
   const handleStatsCardClick = (statusType: 'all_students' | 'debtors' | 'paid_fully') => {
@@ -42,21 +49,25 @@ export default function ReportsTab() {
   const enrichedStudents = useMemo(() => {
     return students.map(student => {
       const studentPayments = payments.filter(p => p.student_id === student.id);
-      const calculatedDue = studentPayments.reduce(
-        (sum, p) => sum + (Number(p.amount_remaining) || 0),
-        0
-      );
+      const groupPrice = student.grade && student.subject
+        ? priceMatrix[priceKey(student.grade, student.subject)]
+        : 0;
+      const netAmountDue = student.isExempt
+        ? 0
+        : calculateNetAmountDue(groupPrice, student.discountAmount);
+      const paidAmount = studentPayments.reduce((sum, payment) => sum + toFiniteAmount(payment.amount_paid), 0);
+      const calculatedDue = calculateRemainingAmount(netAmountDue, paidAmount);
       return { ...student, calculatedDue };
     });
-  }, [students, payments]);
+  }, [students, payments, priceMatrix]);
 
   const stats = useMemo(() => {
     const totalPaymentsCollected = payments.reduce(
       (sum, p) => sum + (Number(p.amount_paid) || 0),
       0
     );
-    const totalRemaining = payments.reduce(
-      (sum, p) => sum + (Number(p.amount_remaining) || 0),
+    const totalRemaining = enrichedStudents.reduce(
+      (sum, student) => sum + (student.calculatedDue ?? 0),
       0
     );
     const studentsWithDueCount = enrichedStudents.filter(s => (s.calculatedDue ?? 0) > 0).length;
@@ -83,32 +94,24 @@ export default function ReportsTab() {
   const fetchStudents = useCallback(async () => {
     try {
       setLoading(true);
-      const todayDate = new Date().toISOString().split('T')[0];
       const now = new Date();
-      const [uniqueStudentsData, count] = await Promise.all([
+      const [uniqueStudentsData, count, loadedPriceMatrix] = await Promise.all([
         getUniqueStudents(),
         getUniqueStudentsCount(),
+        getPriceMatrix(),
       ]);
       setUniqueCount(count);
+      setPriceMatrix(loadedPriceMatrix);
 
       let paymentsQuery = supabase.from('payments').select(
-        'student_id, amount_paid, amount_remaining'
+        'student_id, amount_paid, month_name'
       );
-      if (financeRange === 'today') {
-        paymentsQuery = paymentsQuery.gte('created_at', `${todayDate}T00:00:00`);
-      } else if (financeRange === 'month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-          .toISOString()
-          .split('T')[0];
-        paymentsQuery = paymentsQuery.gte('created_at', `${startOfMonth}T00:00:00`);
-      } else if (financeRange.startsWith('m')) {
+      if (financeRange === 'month' || financeRange.startsWith('m')) {
         const monthIndex = parseInt(financeRange.replace('m', ''), 10) - 1;
-        const currentYear = now.getFullYear();
-        const startOfMonth = new Date(currentYear, monthIndex, 1).toISOString();
-        const endOfMonth = new Date(currentYear, monthIndex + 1, 0, 23, 59, 59).toISOString();
-        paymentsQuery = paymentsQuery
-          .gte('created_at', startOfMonth)
-          .lte('created_at', endOfMonth);
+        const targetMonth = financeRange === 'month'
+          ? now.toLocaleString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' })
+          : new Date(now.getFullYear(), monthIndex, 1).toLocaleString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
+        paymentsQuery = paymentsQuery.eq('month_name', targetMonth);
       }
 
       const { data: paymentsData, error: paymentsError } = await paymentsQuery;
@@ -129,6 +132,10 @@ export default function ReportsTab() {
             group_name: s.group_name ?? undefined,
             grade_level: s.grade_level ?? undefined,
             due_amount: s.due_amount ?? undefined,
+            grade: s.grade ?? undefined,
+            subject: s.subject ?? undefined,
+            discountAmount: s.discountAmount ?? 0,
+            isExempt: s.isExempt ?? false,
           }))
         );
       }
