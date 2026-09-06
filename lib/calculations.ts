@@ -81,3 +81,9 @@ export const calculateAttendanceRate = (attendance: Attendance[] = []): number =
   ).length;
   return Math.round((presentCount / attendance.length) * 100);
 };
+
+export const calculateNetAmountDue = (groupPrice: unknown, discount: unknown): number =>
+  Math.max(0, toFiniteAmount(groupPrice) - Math.max(0, toFiniteAmount(discount)));
+
+export const calculateRemainingAmount = (netAmountDue: unknown, paidAmount: unknown): number =>
+  Math.max(0, toFiniteAmount(netAmountDue) - Math.max(0, toFiniteAmount(paidAmount)));

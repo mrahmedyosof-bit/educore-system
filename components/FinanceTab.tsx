@@ -6,7 +6,29 @@ import {
   getPayments,
   PaymentRecord as ServicePaymentRecord,
 } from '@/lib/services/payments';
-          <div>
+import { getStudents, getUniqueStudents, Student as BaseStudent } from '@/lib/services/students';
+import { getPriceMatrix, priceKey, type PriceMatrix } from '@/lib/services/settings';
+import { supabase } from '@/lib/supabase';
+import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
+import WhatsAppButton from './WhatsAppButton';
+import { emitPaymentUpdate } from '@/lib/events';
+import { calculateFinancialSummary, calculateNetAmountDue, calculateRemainingAmount, toFiniteAmount } from '@/lib/calculations';
+import { useCenterSettings } from '@/hooks/useCenterSettings';
+import {
+  STAGES,
+  ALL_GRADES,
+  INITIAL_FORM_DATA,
+  INPUT_CLASS,
+  getMonthStatus,
+  getCurrentMonthName,
+  getTodayDateISO,
+  type StudentFormData,
+} from './finance/constants';
+
+export type Student = BaseStudent;
+
+type FinanceStudent = Student & {
+  is_exempt?: boolean | null;
   discount?: number | null;
   discount_amount?: number | null;
 };
@@ -223,26 +245,26 @@ export default function FinanceTab() {
   const getStudentFinalFee = useCallback((student: Student): number => {
     if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
     const price = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
-    return Math.max(0, price - getStudentDiscount(student));
+    return calculateNetAmountDue(price, getStudentDiscount(student));
   }, [priceMatrix]);
 
   const getStudentNetAmountDue = useCallback((student: Student): number => {
     if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
     const groupPrice = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
-    return Math.max(0, groupPrice - getStudentDiscount(student));
+    return calculateNetAmountDue(groupPrice, getStudentDiscount(student));
   }, [priceMatrix]);
 
   const applyAutoRemaining = (paidRaw: string, due: number | undefined) => {
     if (due === undefined || touchedRemaining) return;
     const paid = Number(paidRaw);
-    const remaining = Number.isFinite(paid) && paid >= 0 ? Math.max(0, due - paid) : due;
+    const remaining = Number.isFinite(paid) && paid >= 0 ? calculateRemainingAmount(due, paid) : due;
     setAmountRemaining(String(remaining));
   };
 
   const selectedPaidAmount = toFiniteAmount(amountPaid);
   const selectedRemainingAmount = selectedDue === undefined
     ? undefined
-    : Math.max(0, selectedDue - selectedPaidAmount);
+    : calculateRemainingAmount(selectedDue, selectedPaidAmount);
 
   useEffect(() => {
     let cancelled = false;
@@ -367,7 +389,7 @@ export default function FinanceTab() {
       const paymentInput = {
         student_id: quickPayStudent.id,
         amount_paid: paidAmount,
-        amount_remaining: Math.max(0, netAmountDue - paidAmount),
+        amount_remaining: calculateRemainingAmount(netAmountDue, paidAmount),
         month_name: targetMonth,
         academic_year: centerSettings.academicYear,
       };
@@ -441,7 +463,7 @@ export default function FinanceTab() {
         student_id: studentId,
         amount_paid: paid,
         amount_remaining: editingPaymentId === null && selectedDue !== undefined
-          ? Math.max(0, selectedDue - paid)
+          ? calculateRemainingAmount(selectedDue, paid)
           : remaining,
         month_name: cleanMonthOption(monthName),
         academic_year: centerSettings.academicYear,
@@ -1893,7 +1915,7 @@ export default function FinanceTab() {
                     (!p.academic_year || p.academic_year === centerSettings.academicYear)
                   );
                   const paidAmount = existingPayment ? toFiniteAmount(existingPayment.amount_paid) : 0;
-                  const remainingAmount = Math.max(0, studentDue - paidAmount);
+                  const remainingAmount = calculateRemainingAmount(studentDue, paidAmount);
                   const isPaid = paidAmount >= studentDue;
                   const isPartial = paidAmount > 0 && paidAmount < studentDue;
                   return (

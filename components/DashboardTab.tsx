@@ -6,6 +6,7 @@ import { useCenterSettings } from '@/hooks/useCenterSettings';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { getUniqueStudentsCount, getStudents } from '@/lib/services/students';
 import { getPriceMatrix, priceKey } from '@/lib/services/settings';
+import { calculateNetAmountDue, calculateRemainingAmount } from '@/lib/calculations';
 
 interface Student {
   id: number;
@@ -231,10 +232,7 @@ export default function DashboardTab({
             if (student.isExempt || !student.grade || !student.subject) return false;
             const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
             const discount = Number(student.discountAmount ?? 0);
-            const finalFee = Math.max(
-              0,
-              price + Number(student.dueAmount ?? 0) - (Number.isFinite(discount) ? discount : 0)
-            );
+            const finalFee = calculateNetAmountDue(price, discount);
             return Number.isFinite(price) && finalFee > 0;
           })
           .map((student) => student.id)
@@ -245,7 +243,7 @@ export default function DashboardTab({
           const price = priceMatrix[priceKey(student.grade, student.subject)];
           if (typeof price === 'number' && Number.isFinite(price)) {
             const discount = student.discountAmount || 0;
-            expectedTotal += Math.max(0, price - discount);
+            expectedTotal += calculateNetAmountDue(price, discount);
           }
         }
       });
@@ -263,11 +261,26 @@ export default function DashboardTab({
         (payment) => paymentTargetMonthKey(payment) === selectedRevenueMonth
       );
 
-      const paymentsWithRemaining = selectedMonthPayments.filter(
-        (p) => p.student_id != null && eligibleStudentIds.has(p.student_id) && Number(p.amount_remaining) > 0
-      );
+      const studentsById = new Map(allStudentsData.map((student) => [student.id, student]));
+      const paidByStudent = new Map<number, number>();
+      selectedMonthPayments.forEach((payment) => {
+        if (payment.student_id == null) return;
+        paidByStudent.set(
+          payment.student_id,
+          (paidByStudent.get(payment.student_id) ?? 0) + (Number(payment.amount_paid) || 0)
+        );
+      });
+      const remainingByStudent = new Map<number, number>();
+      eligibleStudentIds.forEach((studentId) => {
+        const student = studentsById.get(studentId);
+        if (!student) return;
+        const price = priceMatrix[priceKey(student.grade || '', student.subject || '')];
+        const netAmountDue = calculateNetAmountDue(price, student.discountAmount);
+        const remaining = calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
+        if (remaining > 0) remainingByStudent.set(studentId, remaining);
+      });
 
-      const studentIds = [...new Set(paymentsWithRemaining.map((p) => p.student_id).filter(Boolean))];
+      const studentIds = Array.from(remainingByStudent.keys());
       let studentsMap = new Map<number, DueStudent>();
 
       if (studentIds.length > 0) {
@@ -287,23 +300,16 @@ export default function DashboardTab({
 
       (selectedMonthPayments as { amount_paid: number | null; amount_remaining: number | null; student_id: number | null }[]).forEach((p) => {
         const paid = Number(p.amount_paid) || 0;
-        const remaining = Number(p.amount_remaining) || 0;
         sumCollected += paid;
-        if (p.student_id != null && eligibleStudentIds.has(p.student_id)) {
-          sumRemaining += remaining;
-        }
-
-        if (remaining > 0 && p.student_id != null && eligibleStudentIds.has(p.student_id)) {
-          const studentData = studentsMap.get(p.student_id);
-          if (studentData) {
-            if (!dueMap[p.student_id]) {
-              dueMap[p.student_id] = {
-                ...studentData,
-                dueAmount: 0,
-              };
-            }
-            dueMap[p.student_id].dueAmount += remaining;
-          }
+      });
+      remainingByStudent.forEach((remaining, studentId) => {
+        sumRemaining += remaining;
+        const studentData = studentsMap.get(studentId);
+        if (studentData) {
+          dueMap[studentId] = {
+            ...studentData,
+            dueAmount: remaining,
+          };
         }
       });
 

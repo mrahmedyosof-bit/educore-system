@@ -86,6 +86,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refreshStudents, currentTenantId]);
 
+  useEffect(() => {
+    const handleDataReset = () => {
+      setStudents([]);
+      setUniqueStudents([]);
+      void refreshStudents();
+    };
+    window.addEventListener('educore:data-reset', handleDataReset);
+    return () => window.removeEventListener('educore:data-reset', handleDataReset);
+  }, [refreshStudents]);
+
   const addStudent = useCallback(
     async (student: StudentInput) => {
       await addStudentService(student);
