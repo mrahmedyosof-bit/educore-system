@@ -131,7 +131,7 @@ const dashboardMonthOptions = Array.from({ length: 24 }, (_, index) => {
   const date = new Date();
   date.setMonth(date.getMonth() - 12 + index, 1);
   const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  return { value, label: date.toLocaleString('ar-EG', { month: 'long', year: 'numeric' }) };
+  return { value, label: date.toLocaleString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' }) };
 });
 
 const orderedDashboardMonthOptions = [
@@ -811,9 +811,9 @@ export default function DashboardTab({
                     {activity.studentName ? `${activity.studentName} — ` : ''}{activity.description}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                    {activity.amount && <span className="font-semibold text-emerald-600 dark:text-emerald-400">{activity.amount.toLocaleString()} ج.م</span>}
+                    {activity.amount && <span className="font-semibold text-emerald-600 dark:text-emerald-400">{activity.amount.toLocaleString('en-US')} ج.م</span>}
                     <span className="text-slate-400 dark:text-slate-500">
-                      {new Date(activity.timestamp).toLocaleString('ar-EG', {
+                      {new Date(activity.timestamp).toLocaleString('ar-EG-u-nu-latn', {
                         hour: '2-digit',
                         minute: '2-digit',
                         day: '2-digit',

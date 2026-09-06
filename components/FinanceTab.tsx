@@ -35,7 +35,7 @@ type FinanceStudent = Student & {
 
 // ==================== دالة تنسيق العملات ====================
 const formatCurrency = (amount: number): string =>
-  `${Math.round(amount).toLocaleString('ar-EG')} ج.م`;
+  `${Math.round(amount).toLocaleString('en-US')} ج.م`;
 
 const isStudentExempt = (student: Student): boolean => {
   const financeStudent = student as FinanceStudent;
@@ -1136,7 +1136,7 @@ export default function FinanceTab() {
         grade: p.student?.grade || '-',
         subject: p.student?.subject || '-',
         paidAmount: toFiniteAmount(p.amount_paid),
-        paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('ar-EG') : '-',
+        paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('ar-EG-u-nu-latn') : '-',
       }))
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [payments, currentMonth, filterMonth]);
@@ -1161,7 +1161,7 @@ export default function FinanceTab() {
         subject: p.student?.subject || '-',
         targetMonth: cleanMonthOption(p.month_name) || '-',
         paidAmount: Number(p.amount_paid || 0),
-        paymentTime: p.created_at ? new Date(p.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '-',
+        paymentTime: p.created_at ? new Date(p.created_at).toLocaleTimeString('ar-EG-u-nu-latn', { hour: '2-digit', minute: '2-digit' }) : '-',
       }))
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [payments, todayDate]);
@@ -2422,7 +2422,7 @@ export default function FinanceTab() {
                         <body>
                           <h2 style="text-align: center;">${escapeHtml(centerSettings.centerName)}</h2>
                           <h3 style="text-align: center;">كشف الإيرادات المحصلة - ${escapeHtml(currentMonth)} (${escapeHtml(centerSettings.academicYear)})</h3>
-                          <p style="text-align: center; color: #666;">إجمالي التحصيل: ${paidStudentsCurrentMonth.reduce((sum, p) => sum + toFiniteAmount(p.paidAmount), 0).toLocaleString()} ج.م</p>
+                          <p style="text-align: center; color: #666;">إجمالي التحصيل: ${paidStudentsCurrentMonth.reduce((sum, p) => sum + toFiniteAmount(p.paidAmount), 0).toLocaleString('en-US')} ج.م</p>
                           ${tableHtml}
                           <script>window.onload = () => window.print();<\/script>
                         </body>
@@ -2520,7 +2520,7 @@ export default function FinanceTab() {
           >
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-800">دفعات اليوم - {new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
+                <h3 className="text-base font-black text-slate-800">دفعات اليوم - {new Date().toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
                 <p className="text-xs text-slate-500">{centerSettings.centerName}</p>
               </div>
               <div className="flex items-center gap-2">
