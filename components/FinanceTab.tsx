@@ -356,7 +356,8 @@ export default function FinanceTab() {
     const zeroDuePayment = Boolean(
       selectedStudent && (isStudentExempt(selectedStudent) || getStudentNetAmountDue(selectedStudent) === 0)
     );
-    if (!selectedStudentId || !selectedSubjectId || (!amountPaid && !zeroDuePayment) || !monthName) {
+    const zeroPaidAllowed = zeroDuePayment || editingPaymentId !== null;
+    if (!selectedStudentId || !selectedSubjectId || (!amountPaid && !zeroPaidAllowed) || !monthName) {
       setMessage({ type: 'error', text: 'يرجى اختيار الطالب والمادة وتحديد المبلغ المدفوع وشهر الاشتراك.' });
       return;
     }
@@ -369,7 +370,7 @@ export default function FinanceTab() {
       if (!Number.isSafeInteger(studentId) || studentId <= 0) {
         throw new Error('معرف الطالب غير صالح.');
       }
-      if (!Number.isFinite(paid) || paid < 0 || (paid === 0 && !zeroDuePayment)) {
+      if (!Number.isFinite(paid) || paid < 0 || (paid === 0 && !zeroPaidAllowed)) {
         throw new Error('يجب أن يكون المبلغ المدفوع أكبر من صفر.');
       }
       if (editingPaymentId === null && selectedDue !== undefined && paid > selectedDue) {
