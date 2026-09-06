@@ -341,7 +341,13 @@ export default function FinanceTab() {
 
   const handleAddPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedStudentId || !selectedSubjectId || !amountPaid || !monthName) {
+    const selectedStudent = selectedStudentId
+      ? studentsById.get(Number(selectedStudentId))
+      : undefined;
+    const zeroDuePayment = Boolean(
+      selectedStudent && (isStudentExempt(selectedStudent) || getStudentNetAmountDue(selectedStudent) === 0)
+    );
+    if (!selectedStudentId || !selectedSubjectId || (!amountPaid && !zeroDuePayment) || !monthName) {
       setMessage({ type: 'error', text: 'يرجى اختيار الطالب والمادة وتحديد المبلغ المدفوع وشهر الاشتراك.' });
       return;
     }
@@ -349,12 +355,12 @@ export default function FinanceTab() {
     setMessage(null);
     try {
       const studentId = Number(selectedStudentId);
-      const paid = Number(amountPaid);
+      const paid = amountPaid.trim() === '' ? 0 : Number(amountPaid);
       const remaining = amountRemaining.trim() === '' ? undefined : Number(amountRemaining);
       if (!Number.isSafeInteger(studentId) || studentId <= 0) {
         throw new Error('معرف الطالب غير صالح.');
       }
-      if (!Number.isFinite(paid) || paid <= 0) {
+      if (!Number.isFinite(paid) || paid < 0 || (paid === 0 && !zeroDuePayment)) {
         throw new Error('يجب أن يكون المبلغ المدفوع أكبر من صفر.');
       }
       if (editingPaymentId === null && selectedDue !== undefined && paid > selectedDue) {
@@ -432,6 +438,8 @@ export default function FinanceTab() {
     setEditingPaymentId(payment.id);
     setSelectedStudentId(String(payment.student_id));
     setSelectedSubjectId(payment.student?.subject || '');
+    setDiscountType('amount');
+    setDiscountValue(String(getStudentDiscount(payment.student)));
     setAmountPaid(String(payment.amount_paid));
     setAmountRemaining(String(payment.amount_remaining ?? 0));
     setMonthName(cleanMonthOption(payment.month_name));
