@@ -345,6 +345,17 @@ export default function FinanceTab() {
     }
   };
 
+  useEffect(() => {
+    const handleDataReset = () => {
+      setStudents([]);
+      setUniqueStudents([]);
+      setPayments([]);
+      void fetchData();
+    };
+    window.addEventListener('educore:data-reset', handleDataReset);
+    return () => window.removeEventListener('educore:data-reset', handleDataReset);
+  }, [fetchData]);
+
   const resetPaymentFieldsForNextEntry = useCallback(() => {
     setEditingPaymentId(null);
     setSelectedStudentId('');

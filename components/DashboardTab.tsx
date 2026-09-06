@@ -379,6 +379,18 @@ export default function DashboardTab({
     };
   }, [selectedRevenueMonth, fetchDashboardMetrics]);
 
+  useEffect(() => {
+    let cancelledFlag = false;
+    const handleDataReset = () => {
+      void fetchDashboardMetrics(() => cancelledFlag);
+    };
+    window.addEventListener('educore:data-reset', handleDataReset);
+    return () => {
+      cancelledFlag = true;
+      window.removeEventListener('educore:data-reset', handleDataReset);
+    };
+  }, [fetchDashboardMetrics]);
+
   const handleSendWhatsApp = useCallback((parentPhone: string, studentName: string, amount: number) => {
     if (!parentPhone) {
       alert('رقم ولي الأمر غير متوفر.');

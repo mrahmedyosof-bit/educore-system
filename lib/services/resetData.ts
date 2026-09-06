@@ -18,10 +18,22 @@ export const RESET_TARGETS = [
 
 export type ResetTargetKey = (typeof RESET_TARGETS)[number]['key'];
 
+const OPTIONAL_RESET_TABLES = new Set<ResetTargetKey>([
+  'group_students',
+  'groups',
+  'subjects',
+]);
+
+const isMissingTableError = (error: { code?: string | null } | null): boolean =>
+  error?.code === '42P01' || error?.code === 'PGRST205';
+
 export async function clearTable(key: ResetTargetKey, notify = true): Promise<void> {
   // شرط gt ضروري لقبول عملية الحذف من PostgREST
   const { error } = await supabase.from(key).delete().gt('id', 0);
-  if (error) throw error;
+  if (error) {
+    if (OPTIONAL_RESET_TABLES.has(key) && isMissingTableError(error)) return;
+    throw error;
+  }
   if (notify && typeof window !== 'undefined') {
     setTimeout(() => window.dispatchEvent(new CustomEvent('educore:data-reset')), 0);
   }
