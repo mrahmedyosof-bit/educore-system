@@ -112,6 +112,7 @@ export default function StudentsTab() {
   >([]);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const studentNameInputRef = useRef<HTMLInputElement | null>(null);
   const [showQuickPayModal, setShowQuickPayModal] = useState(false);
   const [quickPayStudent, setQuickPayStudent] = useState<ApplicationStudent | null>(null);
   const [quickPayAmount, setQuickPayAmount] = useState<string>('');
@@ -329,6 +330,21 @@ export default function StudentsTab() {
     setExtraOpen(false);
   }
 
+  const clearPersonalFieldsForNextStudent = () => {
+    setFormData((prev) => ({
+      ...prev,
+      name: '',
+      barcode: '',
+      guardianName: '',
+      guardianPhone: '',
+      guardianWhatsapp: '',
+      guardianNotes: '',
+      address: '',
+      school: '',
+    }));
+    requestAnimationFrame(() => studentNameInputRef.current?.focus());
+  };
+
   const handleInputChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -442,8 +458,12 @@ export default function StudentsTab() {
       } else {
         await addStudent(studentData);
       }
-      resetForm();
-      setFormOpen(false);
+      if (editingId !== null) {
+        resetForm();
+        setFormOpen(false);
+      } else {
+        clearPersonalFieldsForNextStudent();
+      }
       showToast({ type: 'success', text: 'تم حفظ بيانات الطالب بنجاح!' });
     } catch (err: unknown) {
       const supabaseError = err as {
@@ -802,6 +822,7 @@ export default function StudentsTab() {
                 </label>
                 <input
                   id="student-name"
+                  ref={studentNameInputRef}
                   type="text"
                   name="name"
                   placeholder="الاسم الكامل"
