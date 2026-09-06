@@ -241,7 +241,8 @@ const toStudent = (row: StudentRow): Student => ({
  * لأن لكل منها جدولًا مستقلًا.
  */
 const toRow = (
-  student: StudentInput | StudentUpdateInput
+  student: StudentInput | StudentUpdateInput,
+  includeCreatedAt = false
 ) =>
   Object.fromEntries(
     Object.entries({
@@ -249,35 +250,39 @@ const toRow = (
        * جدول students
        */
       name:
-        student.name,
+        student.name === undefined ? undefined : String(student.name).trim(),
 
       phone:
         student.phone,
 
       parent_phone:
-        student.parent_phone ??
-        student.guardian_phone,
+        (student.parent_phone ?? student.guardian_phone) === undefined
+          ? undefined
+          : String(student.parent_phone ?? student.guardian_phone).trim() || null,
 
       group_name:
-        student.group_name ??
-        student.group,
+        (() => {
+          const groupName = student.group_name ?? student.group;
+          return groupName === undefined ? undefined : String(groupName).trim() || 'مجموعة 1';
+        })(),
 
       grade:
-        student.grade,
+        student.grade === undefined ? undefined : String(student.grade).trim(),
 
       student_code:
-        student.student_code ??
-        student.barcode ??
-        student.code,
+        (() => {
+          const code = student.student_code ?? student.barcode ?? student.code;
+          return code === undefined ? undefined : String(code).trim() || null;
+        })(),
 
       behavior_rating:
         student.behavior_rating,
 
       discount_type:
-        student.discount_type,
+        student.discount_type ?? 'amount',
 
       subject:
-        student.subject,
+        student.subject === undefined ? undefined : String(student.subject).trim(),
 
       due_amount:
         student.due_amount ??
@@ -309,13 +314,13 @@ const toRow = (
         student.guardian_notes ?? null,
 
       is_exempt:
-        student.is_exempt ?? student.isExempt,
+        Boolean(student.is_exempt ?? student.isExempt),
 
       discount_amount:
-        student.discount ??
-        student.discount_amount ??
-        student.discountAmount ??
-        0,
+        Number(student.discount ?? student.discount_amount ?? student.discountAmount) || 0,
+
+      created_at:
+        includeCreatedAt ? student.created_at ?? new Date().toISOString() : undefined,
 
       address:
         student.address ?? null,
@@ -522,7 +527,7 @@ export async function addStudent(
     }
   }
 
-  const row = toRow(student);
+  const row = toRow(student, true);
 
   const { error } = await supabase
     .from('students')

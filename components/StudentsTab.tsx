@@ -369,6 +369,9 @@ export default function StudentsTab() {
     return getNextStudentCode(uniqueStudents);
   };
 
+  const generateUniqueBarcode = (): string =>
+    `${nextBarcodeValue()}-${Date.now().toString()}-${Math.random().toString(36).slice(2, 8)}`;
+
   const handleSubmitForm = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const name = formData.name.trim();
@@ -378,7 +381,7 @@ export default function StudentsTab() {
     }
     let barcode = formData.barcode.trim();
     if (!barcode) {
-      barcode = `${nextBarcodeValue()}-${Date.now().toString()}`;
+      barcode = generateUniqueBarcode();
     }
     if (
       uniqueStudents.some(
@@ -456,14 +459,13 @@ export default function StudentsTab() {
         supabaseError?.hint ?? null
       );
       const errorCode = (err as { code?: string } | null)?.code;
-      if (errorCode === '23505') {
-        showToast({
-          type: 'error',
-          text: 'تعذر الحفظ: يوجد طالب آخر بنفس الاسم مسجل بالفعل في هذه المجموعة والمادة.',
-        });
-      } else {
-        showToast({ type: 'error', text: getFriendlyErrorMessage(err, 'تعذر حفظ بيانات الطالب.') });
-      }
+      const databaseError = [supabaseError?.message, supabaseError?.details]
+        .filter((value): value is string => Boolean(value))
+        .join(' | ');
+      showToast({
+        type: 'error',
+        text: databaseError || getFriendlyErrorMessage(err, `تعذر حفظ بيانات الطالب${errorCode ? ` (${errorCode})` : ''}.`),
+      });
     }
   };
 
@@ -502,7 +504,7 @@ export default function StudentsTab() {
   };
 
   const generateBarcode = () => {
-    setFormData((prev) => ({ ...prev, barcode: nextBarcodeValue() }));
+    setFormData((prev) => ({ ...prev, barcode: generateUniqueBarcode() }));
   };
 
   const handleCardClick = (
