@@ -143,6 +143,9 @@ const targetMonthKey = (value: string | null | undefined): string => {
   return year && monthIndex >= 0 ? `${year}-${String(monthIndex + 1).padStart(2, '0')}` : '';
 };
 
+const paymentTargetMonthKey = (payment: { month_name?: string | null; target_month?: string | null; month?: string | null }): string =>
+  targetMonthKey(payment.target_month || payment.month || payment.month_name);
+
 export default function DashboardTab({
   onOpenQRScanner,
   onNavigateToTab,
@@ -257,7 +260,7 @@ export default function DashboardTab({
       if (paymentsError) throw paymentsError;
 
       const selectedMonthPayments = (paymentsData ?? []).filter(
-        (payment) => targetMonthKey(payment.month_name) === selectedRevenueMonth
+        (payment) => paymentTargetMonthKey(payment) === selectedRevenueMonth
       );
 
       const paymentsWithRemaining = selectedMonthPayments.filter(

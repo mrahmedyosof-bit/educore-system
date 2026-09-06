@@ -6,30 +6,7 @@ import {
   getPayments,
   PaymentRecord as ServicePaymentRecord,
 } from '@/lib/services/payments';
-import { getStudents, getUniqueStudents, Student as BaseStudent } from '@/lib/services/students';
-import { getPriceMatrix, priceKey, type PriceMatrix } from '@/lib/services/settings';
-import { supabase } from '@/lib/supabase';
-import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
-import WhatsAppButton from './WhatsAppButton';
-import { emitPaymentUpdate } from '@/lib/events';
-import { calculateFinancialSummary, toFiniteAmount } from '@/lib/calculations';
-import { useCenterSettings } from '@/hooks/useCenterSettings';
-import {
-  STAGES,
-  ALL_GRADES,
-  INITIAL_FORM_DATA,
-  INPUT_CLASS,
-  getMonthStatus,
-  getCurrentMonthName,
-  getTodayDateISO,
-  type StudentFormData,
-} from './finance/constants';
-
-// توسيع واجهة الطالب لدعم كافة الخصائص الاختيارية المتوقعة
-export type Student = BaseStudent;
-
-type FinanceStudent = Student & {
-  is_exempt?: boolean | null;
+          <div>
   discount?: number | null;
   discount_amount?: number | null;
 };
@@ -1099,9 +1076,10 @@ export default function FinanceTab() {
   const collectionRate = financialSummary.collectionRate;
 
   const paidStudentsCurrentMonth = useMemo(() => {
+    const paidStudentsMonth = filterMonth === 'الكل' ? currentMonth : cleanMonthOption(filterMonth);
     return payments
       .filter(
-        (p) => cleanMonthOption(p.month_name) === currentMonth && Number(p.amount_paid || 0) > 0
+        (p) => cleanMonthOption(p.month_name) === paidStudentsMonth && Number(p.amount_paid || 0) > 0
       )
       .map((p) => ({
         ...p,
@@ -1112,7 +1090,7 @@ export default function FinanceTab() {
         paymentDate: p.created_at ? new Date(p.created_at).toLocaleDateString('ar-EG') : '-',
       }))
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-  }, [payments, currentMonth]);
+  }, [payments, currentMonth, filterMonth]);
 
   const filteredPaidStudents = useMemo(() => {
     if (!deferredPaidStudentsSearch.trim()) return paidStudentsCurrentMonth;
@@ -1121,6 +1099,8 @@ export default function FinanceTab() {
       p.studentName.toLowerCase().includes(query)
     );
   }, [paidStudentsCurrentMonth, deferredPaidStudentsSearch]);
+
+  const paidStudentsModalMonth = filterMonth === 'الكل' ? currentMonth : cleanMonthOption(filterMonth);
 
   const todayPayments = useMemo(() => {
     return payments
@@ -1346,7 +1326,29 @@ export default function FinanceTab() {
               )}
             </div>
           </div>
-
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => document.getElementById('quick-collection-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-700"
+            >
+              ⚡ تحصيل سريع
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTodayPaymentsModal(true)}
+              className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 transition hover:bg-amber-100"
+            >
+              📅 تقرير اليوم
+            </button>
+            <button
+              type="button"
+              onClick={() => showToast({ type: 'error', text: 'يرجى فتح تبويب المصروفات لإضافة مصروف جديد.' })}
+              className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+            >
+              🧾 إضافة مصروفات
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1797,7 +1799,7 @@ export default function FinanceTab() {
       </div>
 
       {/* ==================== التحصيل السريع ==================== */}
-      <div className="rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+      <div id="quick-collection-section" className="rounded-3xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-6 dark:border-slate-700">
           <h3 className="text-base font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
             ⚡ التحصيل السريع — طلاب المجموعة المختارة
@@ -2310,7 +2312,7 @@ export default function FinanceTab() {
           >
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-800">الطلاب المسددون - {currentMonth}</h3>
+                <h3 className="text-base font-black text-slate-800">الطلاب المسددون - {paidStudentsModalMonth}</h3>
                 <p className="text-xs text-slate-500">السنة الدراسية: {centerSettings.academicYear} | {centerSettings.centerName}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -2388,7 +2390,8 @@ export default function FinanceTab() {
                       <th className="p-3 font-bold">المادة / المجموعة</th>
                       <th className="p-3 font-bold">المبلغ</th>
                       <th className="p-3 font-bold">طريقة الدفع</th>
-                      <th className="p-3 font-bold">الحالة</th>
+                          <th className="p-3 font-bold">الحالة</th>
+                          <th className="p-3 font-bold">إجراء</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2403,6 +2406,20 @@ export default function FinanceTab() {
                           <span className="rounded-lg bg-emerald-50 px-2.5 py-1 font-black text-emerald-700">
                             🟢 تم السداد
                           </span>
+                        </td>
+                        <td className="p-3">
+                          {p.student && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowPaidStudentsModal(false);
+                                openQuickPay(p.student!, getStudentNetAmountDue(p.student!));
+                              }}
+                              className="rounded-xl bg-amber-50 px-2.5 py-1.5 text-[10px] font-bold text-amber-700 transition hover:bg-amber-100"
+                            >
+                              ✏️ تعديل
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
