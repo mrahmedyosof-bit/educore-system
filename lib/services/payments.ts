@@ -28,8 +28,8 @@ export async function addPayment(input: PaymentInput): Promise<PaymentRecord> {
     throw new Error('معرف الطالب غير صالح.');
   }
 
-  if (!Number.isFinite(input.amount_paid) || input.amount_paid <= 0) {
-    throw new Error('يجب أن يكون المبلغ المدفوع أكبر من صفر.');
+  if (!Number.isFinite(input.amount_paid) || input.amount_paid < 0) {
+    throw new Error('المبلغ المدفوع يجب ألا يكون سالباً.');
   }
 
   if (

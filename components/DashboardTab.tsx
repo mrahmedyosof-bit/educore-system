@@ -126,14 +126,30 @@ const formatDashboardMonth = (value: string): string => {
   return cleanMonthOption(`${englishMonth} ${year}`);
 };
 
+const dashboardMonthOptions = Array.from({ length: 24 }, (_, index) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 12 + index, 1);
+  const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  return { value, label: date.toLocaleString('ar-EG', { month: 'long', year: 'numeric' }) };
+});
+
+const targetMonthKey = (value: string | null | undefined): string => {
+  const normalized = cleanMonthOption(String(value ?? ''));
+  const numericMatch = normalized.match(/(\d{4})\s+(\d{1,2})$/);
+  if (numericMatch) return `${numericMatch[1]}-${numericMatch[2].padStart(2, '0')}`;
+  const year = normalized.match(/\d{4}/)?.[0];
+  const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const monthIndex = monthNames.findIndex((month) => normalized.includes(month));
+  return year && monthIndex >= 0 ? `${year}-${String(monthIndex + 1).padStart(2, '0')}` : '';
+};
+
 export default function DashboardTab({
   onOpenQRScanner,
   onNavigateToTab,
 }: DashboardTabProps) {
   const { settings: centerSettings } = useCenterSettings();
-  const [financeRange, setFinanceRange] = useState<'today' | 'month' | 'all' | 'custom_month'>('month');
-  const [selectedCustomMonth, setSelectedCustomMonth] = useState<string>(
-    new Date().toISOString().slice(0, 7)
+  const [selectedRevenueMonth, setSelectedRevenueMonth] = useState<string>(
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   );
   const [totalStudents, setTotalStudents] = useState<number>(0);
   const [collectedAmount, setCollectedAmount] = useState<number>(0);
@@ -233,29 +249,18 @@ export default function DashboardTab({
 
       if (!cancelled()) setExpectedRevenue(expectedTotal);
 
-      let paymentsQuery = supabase
+      const paymentsQuery = supabase
         .from('payments')
-        .select('amount_paid, amount_remaining, created_at, student_id');
-
-      const now = new Date();
-      if (financeRange === 'today') {
-        paymentsQuery = paymentsQuery.gte('created_at', `${todayDate}T00:00:00`);
-      } else if (financeRange === 'month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-        paymentsQuery = paymentsQuery.gte('created_at', `${startOfMonth}T00:00:00`);
-      } else if (financeRange === 'custom_month' && selectedCustomMonth) {
-        const [year, month] = selectedCustomMonth.split('-').map(Number);
-        const startOfCustomMonth = new Date(year, month - 1, 1).toISOString();
-        const endOfCustomMonth = new Date(year, month, 0, 23, 59, 59).toISOString();
-        paymentsQuery = paymentsQuery
-          .gte('created_at', startOfCustomMonth)
-          .lte('created_at', endOfCustomMonth);
-      }
+        .select('amount_paid, amount_remaining, month_name, created_at, student_id');
 
       const { data: paymentsData, error: paymentsError } = await paymentsQuery;
       if (paymentsError) throw paymentsError;
 
-      const paymentsWithRemaining = (paymentsData ?? []).filter(
+      const selectedMonthPayments = (paymentsData ?? []).filter(
+        (payment) => targetMonthKey(payment.month_name) === selectedRevenueMonth
+      );
+
+      const paymentsWithRemaining = selectedMonthPayments.filter(
         (p) => p.student_id != null && eligibleStudentIds.has(p.student_id) && Number(p.amount_remaining) > 0
       );
 
@@ -277,7 +282,7 @@ export default function DashboardTab({
       let sumRemaining = 0;
       const dueMap: Record<number, DueStudent> = {};
 
-      (paymentsData as { amount_paid: number | null; amount_remaining: number | null; student_id: number | null }[] | null ?? []).forEach((p) => {
+      (selectedMonthPayments as { amount_paid: number | null; amount_remaining: number | null; student_id: number | null }[]).forEach((p) => {
         const paid = Number(p.amount_paid) || 0;
         const remaining = Number(p.amount_remaining) || 0;
         sumCollected += paid;
@@ -305,7 +310,7 @@ export default function DashboardTab({
         setStudentsWithDue(Object.values(dueMap));
       }
 
-      const recentPayments = (paymentsData ?? [])
+      const recentPayments = selectedMonthPayments
         .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
         .slice(0, 5);
 
@@ -352,7 +357,7 @@ export default function DashboardTab({
     } finally {
       if (!cancelled()) setLoading(false);
     }
-  }, [financeRange, selectedCustomMonth]);
+  }, [selectedRevenueMonth]);
 
   useEffect(() => {
     let cancelledFlag = false;
@@ -363,7 +368,7 @@ export default function DashboardTab({
     return () => {
       cancelledFlag = true;
     };
-  }, [financeRange, selectedCustomMonth, fetchDashboardMetrics]);
+  }, [selectedRevenueMonth, fetchDashboardMetrics]);
 
   const handleSendWhatsApp = useCallback((parentPhone: string, studentName: string, amount: number) => {
     if (!parentPhone) {
@@ -435,7 +440,7 @@ export default function DashboardTab({
     },
     {
       key: 'collectedAmount',
-      label: 'إجمالي الإيرادات المحصلة',
+      label: `إيرادات شهر ${formatDashboardMonth(selectedRevenueMonth)}`,
       value: loading ? '...' : collectedAmount.toLocaleString('en-US'),
       subLabel: 'اضغط لعرض التفاصيل ↗',
       icon: '💵',
@@ -445,7 +450,7 @@ export default function DashboardTab({
       valueColor: 'text-emerald-600 dark:text-emerald-400',
       onClick: () => onNavigateToTab?.('finance'),
       title: 'الانتقال للمالية والاشتراكات',
-      showRangeFilter: true,
+      showMonthSelector: true,
       unit: 'ج.م',
     },
     {
@@ -528,7 +533,9 @@ export default function DashboardTab({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {kpiCards.map((card) => {
           const isCollectedCard = card.key === 'collectedAmount';
-          const collectionRate = expectedRevenue > 0 ? Math.round((collectedAmount / expectedRevenue) * 100) : 0;
+          const collectionRate = expectedRevenue > 0
+            ? Math.min(100, Math.round((collectedAmount / expectedRevenue) * 100))
+            : 0;
           return (
             <div
               key={card.key}
@@ -554,39 +561,29 @@ export default function DashboardTab({
                     </h3>
                     {isCollectedCard && expectedRevenue > 0 && (
                       <span
-                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-100 px-2 py-1 text-xs font-black text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-black ${
+                          collectionRate >= 50
+                            ? 'border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                            : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }`}
                         title="نسبة التحصيل من الدخل المتوقع"
                       >
                         📈 {collectionRate}%
                       </span>
                     )}
                   </div>
-                  {card.showRangeFilter && (
+                  {card.showMonthSelector && (
                     <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg" onClick={(e) => e.stopPropagation()}>
                       <select
-                        value={financeRange}
-                        onChange={(e) => setFinanceRange(e.target.value as 'today' | 'month' | 'all' | 'custom_month')}
-                        className="bg-transparent text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
+                        value={selectedRevenueMonth}
+                        onChange={(e) => setSelectedRevenueMonth(e.target.value)}
+                        aria-label="اختيار شهر الإيرادات"
+                        className="max-w-[145px] bg-transparent text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                       >
-                        <option value="today">اليوم</option>
-                        <option value="month">هذا الشهر</option>
-                        <option value="custom_month">شهر...</option>
-                        <option value="all">الكل</option>
+                        {dashboardMonthOptions.map((month) => (
+                          <option key={month.value} value={month.value}>{month.label}</option>
+                        ))}
                       </select>
-                      {financeRange === 'custom_month' && (
-                        <>
-                          <input
-                            type="month"
-                            value={selectedCustomMonth}
-                            onChange={(e) => setSelectedCustomMonth(e.target.value)}
-                            aria-label={cleanMonthOption(formatDashboardMonth(selectedCustomMonth))}
-                            className="bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none shadow-sm"
-                          />
-                          <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
-                            {cleanMonthOption(formatDashboardMonth(selectedCustomMonth))}
-                          </span>
-                        </>
-                      )}
                     </div>
                   )}
                 </div>
@@ -600,7 +597,7 @@ export default function DashboardTab({
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                       <div
                         className={`h-full rounded-full transition-all duration-700 ${
-                          collectionRate >= 80 ? 'bg-emerald-500' : collectionRate >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                          collectionRate >= 50 ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
                         }`}
                         style={{ width: `${Math.min(collectionRate, 100)}%` }}
                       />
