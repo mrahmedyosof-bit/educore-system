@@ -879,11 +879,22 @@ export default function FinanceTab() {
       'مايو', 'يونيو', 'يوليو', 'أغسطس',
       'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
     ];
-    return Array.from({ length: 12 }, (_, index) => {
+    const generatedOptions = Array.from({ length: 12 }, (_, index) => {
       const monthIndex = (8 + index) % 12;
       const year = monthIndex >= 8 ? startYear : startYear + 1;
       return cleanMonthOption(`${monthNames[monthIndex]} ${year}`);
     });
+    const august = `أغسطس ${startYear}`;
+    const september = `سبتمبر ${startYear}`;
+    return Array.from(new Set([
+      'أغسطس 2026',
+      'سبتمبر 2026',
+      august,
+      september,
+      ...generatedOptions.filter((option) =>
+        option !== august && option !== september && option !== 'أغسطس 2026' && option !== 'سبتمبر 2026'
+      ),
+    ]));
   }, [centerSettings.academicYear]);
 
   const currentDateInfo = useMemo(() => {
@@ -898,7 +909,12 @@ export default function FinanceTab() {
 
   const paymentsWithStatus = useMemo(() => {
     return payments.map(payment => {
-      const remaining = Number(payment.amount_remaining ?? 0);
+      const remaining = payment.student
+        ? calculateRemainingAmount(
+            getStudentNetAmountDue(payment.student),
+            payment.amount_paid
+          )
+        : Number(payment.amount_remaining ?? 0);
       const { isCurrent, isPast, isFuture } = getMonthStatus(
         cleanMonthOption(payment.month_name),
         currentMonth
@@ -910,14 +926,14 @@ export default function FinanceTab() {
         statusText = 'مسدد ✓';
       } else if (isPast) {
         statusType = 'overdue';
-        statusText = `متأخر ${formatCurrency(remaining)}`;
+        statusText = `مديونية متأخرة ${formatCurrency(remaining)}`;
       } else if (isCurrent) {
-        if (currentDateInfo.isPastDueDate) {
+        if (currentDateInfo.day >= 21) {
           statusType = 'overdue';
-          statusText = `متأخر ${formatCurrency(remaining)}`;
+          statusText = `مطلوب سداده ${formatCurrency(remaining)}`;
         } else {
           statusType = 'due';
-          statusText = `مطلوب السداد ${formatCurrency(remaining)}`;
+          statusText = `قيد التحصيل ${formatCurrency(remaining)}`;
         }
       } else if (isFuture) {
         statusType = 'future';
@@ -931,7 +947,7 @@ export default function FinanceTab() {
         status: { statusType, statusText, remaining },
       };
     });
-  }, [payments, currentMonth, currentDateInfo.isPastDueDate]);
+  }, [payments, currentMonth, currentDateInfo.day, getStudentNetAmountDue]);
 
   const filteredPayments = useMemo(
     () => paymentsWithStatus.filter((p) => {

@@ -26,6 +26,19 @@ interface PaymentRow {
   month_name: string | null;
 }
 
+const getDebtStage = (targetMonth: string | null): 'pending' | 'late' | 'overdue' => {
+  const current = new Date();
+  const [monthName, yearText] = String(targetMonth ?? '').trim().split(' ');
+  const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const targetMonthIndex = months.indexOf(monthName);
+  const targetYear = Number(yearText);
+  if (targetMonthIndex < 0 || !Number.isFinite(targetYear)) return 'pending';
+  const targetValue = targetYear * 12 + targetMonthIndex;
+  const currentValue = current.getFullYear() * 12 + current.getMonth();
+  if (targetValue < currentValue) return 'overdue';
+  return current.getDate() >= 21 ? 'late' : 'pending';
+};
+
 type FinanceRangeType =
   | 'today'
   | 'month'
@@ -57,7 +70,11 @@ export default function ReportsTab() {
         : calculateNetAmountDue(groupPrice, student.discountAmount);
       const paidAmount = studentPayments.reduce((sum, payment) => sum + toFiniteAmount(payment.amount_paid), 0);
       const calculatedDue = calculateRemainingAmount(netAmountDue, paidAmount);
-      return { ...student, calculatedDue };
+      return {
+        ...student,
+        calculatedDue,
+        debtStage: calculatedDue > 0 ? getDebtStage(studentPayments[0]?.month_name ?? null) : null,
+      };
     });
   }, [students, payments, priceMatrix]);
 
@@ -345,8 +362,14 @@ export default function ReportsTab() {
                         </td>
                         <td className="py-3 px-3">
                           {due > 0 ? (
-                            <span className="px-2.5 py-1 rounded-xl font-bold text-[11px] bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900">
-                              {due} ج.م متأخرات
+                            <span className={`px-2.5 py-1 rounded-xl font-bold text-[11px] ${
+                              student.debtStage === 'overdue'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-900'
+                                : student.debtStage === 'late'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-900'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            }`}>
+                              {student.debtStage === 'overdue' ? 'مديونية متأخرة' : student.debtStage === 'late' ? 'مطلوب سداده' : 'قيد التحصيل'}: {due} ج.م
                             </span>
                           ) : (
                             <span className="px-2.5 py-1 rounded-xl font-bold text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-900">

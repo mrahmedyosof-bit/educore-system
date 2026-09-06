@@ -134,6 +134,12 @@ const dashboardMonthOptions = Array.from({ length: 24 }, (_, index) => {
   return { value, label: date.toLocaleString('ar-EG', { month: 'long', year: 'numeric' }) };
 });
 
+const orderedDashboardMonthOptions = [
+  { value: '2026-08', label: 'أغسطس 2026' },
+  { value: '2026-09', label: 'سبتمبر 2026' },
+  ...dashboardMonthOptions.filter((month) => month.value !== '2026-08' && month.value !== '2026-09'),
+];
+
 const targetMonthKey = (value: string | null | undefined): string => {
   const normalized = cleanMonthOption(String(value ?? ''));
   const numericMatch = normalized.match(/(\d{4})\s+(\d{1,2})$/);
@@ -601,7 +607,7 @@ export default function DashboardTab({
                         aria-label="اختيار شهر الإيرادات"
                         className="max-w-[145px] bg-transparent text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                       >
-                        {dashboardMonthOptions.map((month) => (
+                        {orderedDashboardMonthOptions.map((month) => (
                           <option key={month.value} value={month.value}>{month.label}</option>
                         ))}
                       </select>
