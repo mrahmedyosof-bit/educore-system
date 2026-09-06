@@ -410,6 +410,8 @@ export default function StudentsTab() {
       return;
     }
     const finalWhatsapp = normalizeEgyptianPhone(formData.guardianWhatsapp || formData.guardianPhone) ?? '';
+    const normalizedDiscount = Number(discountAmount) || 0;
+    const normalizedIsExempt = Boolean(isExempt);
     const studentData = {
       barcode,
       name,
@@ -418,8 +420,11 @@ export default function StudentsTab() {
       group,
       subject,
       dueAmount,
-      discountAmount,
-      isExempt,
+      discount: normalizedDiscount,
+      discountAmount: normalizedDiscount,
+      discount_type: 'amount',
+      is_exempt: normalizedIsExempt,
+      isExempt: normalizedIsExempt,
       guardian_name: formData.guardianName.trim(),
       guardian_phone: formData.guardianPhone.trim(),
       guardian_whatsapp: finalWhatsapp,
@@ -437,6 +442,18 @@ export default function StudentsTab() {
       setFormOpen(false);
       showToast({ type: 'success', text: 'تم حفظ بيانات الطالب بنجاح!' });
     } catch (err: unknown) {
+      const supabaseError = err as {
+        message?: string;
+        details?: string | null;
+        hint?: string | null;
+        code?: string | null;
+      } | null;
+      console.error('SAVE STUDENT ERROR:', {
+        message: supabaseError?.message ?? String(err),
+        details: supabaseError?.details ?? null,
+        hint: supabaseError?.hint ?? null,
+        code: supabaseError?.code ?? null,
+      });
       const errorCode = (err as { code?: string } | null)?.code;
       if (errorCode === '23505') {
         showToast({

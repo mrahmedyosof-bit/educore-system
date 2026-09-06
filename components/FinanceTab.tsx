@@ -31,6 +31,7 @@ export type Student = BaseStudent;
 type FinanceStudent = Student & {
   is_exempt?: boolean | null;
   discount?: number | null;
+  discount_amount?: number | null;
 };
 
 // ==================== دالة تنسيق العملات ====================
@@ -44,7 +45,10 @@ const isStudentExempt = (student: Student): boolean => {
 
 const getStudentDiscount = (student: Student): number => {
   const financeStudent = student as FinanceStudent;
-  return Math.max(0, toFiniteAmount(financeStudent.discount ?? student.discountAmount));
+  return Math.max(
+    0,
+    toFiniteAmount(financeStudent.discount ?? financeStudent.discount_amount ?? student.discountAmount)
+  );
 };
 
 const cleanMonthOption = (value: unknown): string => {
@@ -1473,7 +1477,7 @@ export default function FinanceTab() {
                 setTouchedRemaining(false);
                 const st = id ? studentsById.get(Number(id)) : undefined;
                 setDiscountType('amount');
-                setDiscountValue(String(st?.discountAmount ?? 0));
+                setDiscountValue(String(st ? getStudentDiscount(st) : 0));
                 if (st?.subject && formSubjects.includes(st.subject)) {
                   setSelectedSubjectId(st.subject);
                 }

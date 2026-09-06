@@ -13,6 +13,9 @@ export interface ApplicationStudent {
   student_code?: string | null;
   behavior_rating?: string | null;
   discount_type?: string | null;
+  discount?: number | null;
+  discount_amount?: number | null;
+  is_exempt?: boolean | null;
   subject?: string | null;
   due_amount?: number | null;
   stage?: string | null;
@@ -158,7 +161,21 @@ const toStudent = (row: StudentRow): Student => ({
 
   isExempt: row.is_exempt ?? false,
 
+  is_exempt: row.is_exempt ?? false,
+
   discountAmount:
+    row.discount_amount !== null &&
+    row.discount_amount !== undefined
+      ? Number(row.discount_amount)
+      : 0,
+
+  discount:
+    row.discount_amount !== null &&
+    row.discount_amount !== undefined
+      ? Number(row.discount_amount)
+      : 0,
+
+  discount_amount:
     row.discount_amount !== null &&
     row.discount_amount !== undefined
       ? Number(row.discount_amount)
@@ -290,10 +307,13 @@ const toRow = (
         student.guardian_notes ?? null,
 
       is_exempt:
-        student.isExempt,
+        student.is_exempt ?? student.isExempt,
 
       discount_amount:
-        student.discountAmount ?? 0,
+        student.discount ??
+        student.discount_amount ??
+        student.discountAmount ??
+        0,
 
       address:
         student.address ?? null,
