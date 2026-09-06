@@ -11,6 +11,7 @@ export interface ApplicationStudent {
   created_at?: string | null;
   grade?: string | null;
   student_code?: string | null;
+  code?: string | null;
   behavior_rating?: string | null;
   discount_type?: string | null;
   discount?: number | null;
@@ -32,9 +33,9 @@ export interface ApplicationStudent {
   barcode: string;
 
   guardian_name?: string;
-  guardian_phone?: string;
-  guardian_whatsapp?: string;
-  guardian_notes?: string;
+  guardian_phone?: string | null;
+  guardian_whatsapp?: string | null;
+  guardian_notes?: string | null;
 
   address?: string | null;
   school?: string | null;
@@ -266,7 +267,8 @@ const toRow = (
 
       student_code:
         student.student_code ??
-        student.barcode,
+        student.barcode ??
+        student.code,
 
       behavior_rating:
         student.behavior_rating,

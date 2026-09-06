@@ -378,7 +378,7 @@ export default function StudentsTab() {
     }
     let barcode = formData.barcode.trim();
     if (!barcode) {
-      barcode = nextBarcodeValue();
+      barcode = `${nextBarcodeValue()}-${Date.now().toString()}`;
     }
     if (
       uniqueStudents.some(
@@ -414,6 +414,7 @@ export default function StudentsTab() {
     const normalizedIsExempt = Boolean(isExempt);
     const studentData = {
       barcode,
+      code: barcode,
       name,
       stage,
       grade,
@@ -426,9 +427,9 @@ export default function StudentsTab() {
       is_exempt: normalizedIsExempt,
       isExempt: normalizedIsExempt,
       guardian_name: formData.guardianName.trim(),
-      guardian_phone: formData.guardianPhone.trim(),
-      guardian_whatsapp: finalWhatsapp,
-      guardian_notes: formData.guardianNotes.trim(),
+      guardian_phone: formData.guardianPhone.trim() || null,
+      guardian_whatsapp: finalWhatsapp || null,
+      guardian_notes: formData.guardianNotes.trim() || null,
       address: formData.address.trim() || null,
       school: formData.school.trim() || null,
     };
@@ -448,12 +449,12 @@ export default function StudentsTab() {
         hint?: string | null;
         code?: string | null;
       } | null;
-      console.error('SAVE STUDENT ERROR:', {
-        message: supabaseError?.message ?? String(err),
-        details: supabaseError?.details ?? null,
-        hint: supabaseError?.hint ?? null,
-        code: supabaseError?.code ?? null,
-      });
+      console.error(
+        'Supabase Save Error:',
+        supabaseError?.message ?? String(err),
+        supabaseError?.details ?? null,
+        supabaseError?.hint ?? null
+      );
       const errorCode = (err as { code?: string } | null)?.code;
       if (errorCode === '23505') {
         showToast({
