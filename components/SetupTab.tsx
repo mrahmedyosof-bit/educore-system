@@ -653,7 +653,7 @@ function DangerZone() {
 
   const targetLabel =
     target === 'all'
-      ? 'كل البيانات (طلاب، حضور، درجات، مدفوعات، مصروفات، اختبارات)'
+      ? 'كل البيانات (طلاب، حضور، نتائج اختبارات، درجات، مجموعات، مدفوعات، مصروفات)'
       : RESET_TARGETS.find((t) => t.key === target)?.label ?? '';
 
   const canRun = confirmation.trim() === 'مسح' && !isClearing && !isPending;

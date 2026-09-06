@@ -7,8 +7,9 @@ import { supabase } from '@/lib/supabase';
 export const RESET_TARGETS = [
   { key: 'payments', label: 'مدفوعات الطلاب' },
   { key: 'attendance', label: 'سجلات الحضور' },
-  { key: 'grades', label: 'درجات الاختبارات' },
+  { key: 'exam_results', label: 'نتائج الاختبارات' },
   { key: 'group_students', label: 'ربط الطلاب بالمجموعات' },
+  { key: 'grades', label: 'درجات الاختبارات' },
   { key: 'students', label: 'الطلاب' },
   { key: 'groups', label: 'المجموعات' },
   { key: 'subjects', label: 'المواد الدراسية' },
@@ -19,6 +20,7 @@ export const RESET_TARGETS = [
 export type ResetTargetKey = (typeof RESET_TARGETS)[number]['key'];
 
 const OPTIONAL_RESET_TABLES = new Set<ResetTargetKey>([
+  'exam_results',
   'group_students',
   'groups',
   'subjects',
@@ -32,7 +34,9 @@ export async function clearTable(key: ResetTargetKey, notify = true): Promise<vo
   const { error } = await supabase.from(key).delete().gt('id', 0);
   if (error) {
     if (OPTIONAL_RESET_TABLES.has(key) && isMissingTableError(error)) return;
-    throw error;
+    const resetError = new Error(`فشل مسح ${RESET_TARGETS.find((target) => target.key === key)?.label ?? key}: ${error.message}`);
+    Object.assign(resetError, error);
+    throw resetError;
   }
   if (notify && typeof window !== 'undefined') {
     setTimeout(() => window.dispatchEvent(new CustomEvent('educore:data-reset')), 0);
