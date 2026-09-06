@@ -164,6 +164,7 @@ export default function FinanceTab() {
   const [filterGrade, setFilterGrade] = useState('الكل');
   const [filterSubject, setFilterSubject] = useState('كل المواد');
   const [quickCollectionSearch, setQuickCollectionSearch] = useState('');
+  const [lateOnly, setLateOnly] = useState(false);
   const [resetPaymentsOpen, setResetPaymentsOpen] = useState(false);
   const [zeroDebtOpen, setZeroDebtOpen] = useState(false);
   const [purgeMonthOpen, setPurgeMonthOpen] = useState(false);
@@ -1087,7 +1088,13 @@ export default function FinanceTab() {
     [expectedMonthlyIncome, currentAcademicYearPayments, currentMonth]
   );
 
-  const actualCollected = financialSummary.totalPaid;
+  const revenueMonth = filterMonth === 'الكل' ? currentMonth : cleanMonthOption(filterMonth);
+  const selectedMonthCollected = useMemo(
+    () => currentAcademicYearPayments
+      .filter((payment) => cleanMonthOption(payment.month_name) === revenueMonth)
+      .reduce((total, payment) => total + toFiniteAmount(payment.amount_paid), 0),
+    [currentAcademicYearPayments, revenueMonth]
+  );
   const remainingToCollect = financialSummary.totalRemaining;
   const collectionRate = financialSummary.collectionRate;
 
@@ -1219,9 +1226,9 @@ export default function FinanceTab() {
 
   const quickCollectionStudents = useMemo(() => {
     const query = deferredQuickCollectionSearch.trim().toLowerCase();
-    if (!query) return filteredStudentsForSelect;
-
-    return filteredStudentsForSelect.filter((student) => {
+    const matchingStudents = !query
+      ? filteredStudentsForSelect
+      : filteredStudentsForSelect.filter((student) => {
       const searchableValues = [
         student.name,
         student.phone,
@@ -1233,8 +1240,31 @@ export default function FinanceTab() {
       return searchableValues.some((value) =>
         String(value ?? '').trim().toLowerCase().includes(query)
       );
+      });
+
+    if (!lateOnly) return matchingStudents;
+    const targetMonth = cleanMonthOption(monthName || currentMonth);
+    return matchingStudents.filter((student) => {
+      const netAmountDue = getStudentNetAmountDue(student);
+      const payment = payments.find(
+        (candidate) =>
+          candidate.student_id === student.id &&
+          cleanMonthOption(candidate.month_name) === targetMonth &&
+          (!candidate.academic_year || candidate.academic_year === centerSettings.academicYear)
+      );
+      const paidAmount = payment ? toFiniteAmount(payment.amount_paid) : 0;
+      return paidAmount < netAmountDue;
     });
-  }, [filteredStudentsForSelect, deferredQuickCollectionSearch]);
+  }, [
+    filteredStudentsForSelect,
+    deferredQuickCollectionSearch,
+    lateOnly,
+    monthName,
+    currentMonth,
+    payments,
+    centerSettings.academicYear,
+    getStudentNetAmountDue,
+  ]);
 
   const printLastPaymentReceipt = useCallback(() => {
     if (!lastPayment) return;
@@ -1365,11 +1395,11 @@ export default function FinanceTab() {
         >
           <div>
             <div className="flex items-center gap-1 mb-1">
-              <p className="text-xs font-bold text-slate-500">إجمالي الإيرادات المحصلة</p>
-              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md">{currentMonth}</span>
+              <p className="text-xs font-bold text-slate-500">إيرادات شهر {revenueMonth}</p>
+              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md">{revenueMonth}</span>
             </div>
             <h3 className="text-3xl font-black mt-1 text-emerald-600">
-              {formatCurrency(actualCollected)}
+              {formatCurrency(selectedMonthCollected)}
             </h3>
             <p className="text-[11px] font-bold mt-1 text-emerald-400">اضغط لعرض التفاصيل ↗</p>
           </div>
@@ -1817,6 +1847,18 @@ export default function FinanceTab() {
               </button>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setLateOnly((current) => !current)}
+            aria-pressed={lateOnly}
+            className={`mt-3 rounded-xl px-3 py-2 text-xs font-black transition sm:mt-0 sm:ms-2 ${
+              lateOnly
+                ? 'bg-rose-600 text-white hover:bg-rose-700'
+                : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+            }`}
+          >
+            المتأخرات فقط
+          </button>
         </div>
         {quickCollectionStudents.length === 0 ? (
           <div className="p-12 text-center text-xs font-bold text-slate-400">
