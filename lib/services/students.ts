@@ -39,6 +39,45 @@ export interface ApplicationStudent {
 
 export type Student = ApplicationStudent;
 
+const GRADE_ORDER = [
+  'الصف الأول الابتدائي',
+  'الصف الثاني الابتدائي',
+  'الصف الثالث الابتدائي',
+  'الصف الرابع الابتدائي',
+  'الصف الخامس الابتدائي',
+  'الصف السادس الابتدائي',
+  'الصف الأول الإعدادي',
+  'الصف الثاني الإعدادي',
+  'الصف الثالث الإعدادي',
+  'الصف الأول الثانوي',
+  'الصف الثاني الثانوي',
+  'الصف الثالث الثانوي',
+];
+
+const getGradeOrder = (student: Pick<ApplicationStudent, 'grade' | 'grade_level'>): number => {
+  const grade = String(student.grade ?? student.grade_level ?? '').trim();
+  const knownGradeIndex = GRADE_ORDER.indexOf(grade);
+  return knownGradeIndex === -1 ? GRADE_ORDER.length : knownGradeIndex;
+};
+
+export const compareStudentsByGradeAndName = (a: ApplicationStudent, b: ApplicationStudent): number =>
+  getGradeOrder(a) - getGradeOrder(b) ||
+  String(a.name ?? '').localeCompare(String(b.name ?? ''), 'ar');
+
+export const sortStudentsByGradeAndName = <T extends ApplicationStudent>(students: T[]): T[] =>
+  [...students].sort(compareStudentsByGradeAndName);
+
+export const getNextStudentCode = (
+  students: Pick<ApplicationStudent, 'barcode'>[],
+  baseCode = 1001
+): string => {
+  const numericCodes = students
+    .map((student) => Number.parseInt(String(student.barcode ?? '').trim(), 10))
+    .filter((code) => Number.isFinite(code));
+  const nextCode = numericCodes.length > 0 ? Math.max(...numericCodes) + 1 : baseCode;
+  return String(nextCode);
+};
+
 export type StudentInput = Omit<ApplicationStudent, 'id'>;
 export type StudentUpdateInput = Partial<StudentInput>;
 
@@ -398,9 +437,9 @@ export async function getStudents(): Promise<Student[]> {
     throw error;
   }
 
-  return (
-    (data as StudentRow[] | null) ?? []
-  ).map(toStudent);
+  return sortStudentsByGradeAndName(
+    ((data as StudentRow[] | null) ?? []).map(toStudent)
+  );
 }
 
 /**
@@ -682,5 +721,5 @@ export async function getUniqueStudents(): Promise<Student[]> {
     }
   });
 
-  return unique;
+  return sortStudentsByGradeAndName(unique);
 }

@@ -2,7 +2,11 @@
 import { useMemo, useState, useCallback, useDeferredValue, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useAppData } from './AppContext';
 import { useCurriculumSettings } from '@/hooks/useCurriculumSettings';
-import { getUniqueStudentsCount } from '@/lib/services/students';
+import {
+  getNextStudentCode,
+  getUniqueStudentsCount,
+  sortStudentsByGradeAndName,
+} from '@/lib/services/students';
 import { priceKey } from '@/lib/services/settings';
 import ExportButtons from './ExportButtons';
 import StudentCardModal from './StudentCardModal';
@@ -362,12 +366,7 @@ export default function StudentsTab() {
   };
 
   const nextBarcodeValue = (): string => {
-    const taken = new Set(
-      uniqueStudents.map((s) => parseInt(s.barcode ?? '', 10)).filter((n) => Number.isFinite(n))
-    );
-    let candidate = taken.size ? Math.max(...taken) + 1 : 1001;
-    while (taken.has(candidate)) candidate += 1;
-    return String(candidate);
+    return getNextStudentCode(uniqueStudents);
   };
 
   const handleSubmitForm = async (e: FormEvent<HTMLFormElement>) => {
@@ -573,9 +572,9 @@ export default function StudentsTab() {
       activeCardFilter !== 'all'
     );
 
-    if (!hasActiveFilters) return uniqueStudents;
-
-    return uniqueStudents.filter((student) => {
+    const matchingStudents = !hasActiveFilters
+      ? uniqueStudents
+      : uniqueStudents.filter((student) => {
       const studentName = String(student.name ?? '').trim().toLowerCase();
       const studentBarcode = String(student.barcode ?? '').trim().toLowerCase();
       const guardianName = String(student.guardian_name ?? '').trim().toLowerCase();
@@ -613,8 +612,10 @@ export default function StudentsTab() {
           matchesCardFilter = true;
           break;
       }
-      return matchesSearch && matchesGrade && matchesSubject && matchesGroup && matchesCardFilter;
-    });
+        return matchesSearch && matchesGrade && matchesSubject && matchesGroup && matchesCardFilter;
+      });
+
+    return sortStudentsByGradeAndName(matchingStudents);
   }, [uniqueStudents, selectedGrade, selectedSubject, selectedGroup, activeCardFilter, netDueOf, deferredSearchQuery, subscriptionCountByStudent]);
 
   const inputClass =
