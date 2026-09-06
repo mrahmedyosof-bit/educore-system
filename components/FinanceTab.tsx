@@ -2199,19 +2199,28 @@ export default function FinanceTab() {
                 {quickPayStudent.subject || '-'} / {quickPayStudent.grade || '-'}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl bg-slate-50 p-3 text-center">
+                <div className="text-[11px] font-bold text-slate-500">سعر الاشتراك</div>
+                <div className="mt-1 text-lg font-black text-slate-700">
+                  {formatCurrency(toFiniteAmount(priceMatrix[priceKey(quickPayStudent.grade || '', quickPayStudent.subject || '')]))}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-3 text-center">
+                <div className="text-[11px] font-bold text-amber-600">قيمة الخصم</div>
+                <div className="mt-1 text-lg font-black text-amber-700">
+                  {formatCurrency(getStudentDiscount(quickPayStudent))}
+                </div>
+              </div>
               <div className="rounded-2xl bg-indigo-50 p-3 text-center">
-                <div className="text-[11px] font-bold text-indigo-600">المبلغ المستحق</div>
+                <div className="text-[11px] font-bold text-indigo-600">المطلوب بعد الخصم</div>
                 <div className="mt-1 text-lg font-black text-indigo-700">
                   {formatCurrency(getStudentNetAmountDue(quickPayStudent))}
                 </div>
               </div>
-              <div className="rounded-2xl bg-amber-50 p-3 text-center">
-                <div className="text-[11px] font-bold text-amber-600">الشهر</div>
-                <div className="mt-1 text-sm font-black text-amber-700">
-                  {cleanMonthOption(monthName || getCurrentMonthName())}
-                </div>
-              </div>
+            </div>
+            <div className="text-center text-xs font-bold text-slate-500">
+              الشهر المستهدف: {cleanMonthOption(monthName || getCurrentMonthName())}
             </div>
             <label className="block text-xs font-bold text-slate-600">
               المبلغ المدفوع (ج.م)
