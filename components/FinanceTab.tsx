@@ -28,9 +28,24 @@ import {
 // توسيع واجهة الطالب لدعم كافة الخصائص الاختيارية المتوقعة
 export type Student = BaseStudent;
 
+type FinanceStudent = Student & {
+  is_exempt?: boolean | null;
+  discount?: number | null;
+};
+
 // ==================== دالة تنسيق العملات ====================
 const formatCurrency = (amount: number): string =>
   `${Math.round(amount).toLocaleString('ar-EG')} ج.م`;
+
+const isStudentExempt = (student: Student): boolean => {
+  const financeStudent = student as FinanceStudent;
+  return financeStudent.is_exempt === true || financeStudent.isExempt === true;
+};
+
+const getStudentDiscount = (student: Student): number => {
+  const financeStudent = student as FinanceStudent;
+  return Math.max(0, toFiniteAmount(financeStudent.discount ?? student.discountAmount));
+};
 
 const cleanMonthOption = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -208,16 +223,26 @@ export default function FinanceTab() {
       : Math.min(selectedPrice, value);
   }, [discountType, discountValue, selectedPrice]);
 
-  const selectedDue = useMemo(() => (
-    selectedPrice === undefined
+  const selectedDue = useMemo(() => {
+    const selectedStudent = selectedStudentId
+      ? studentsById.get(Number(selectedStudentId))
+      : undefined;
+    if (selectedStudent && isStudentExempt(selectedStudent)) return 0;
+    return selectedPrice === undefined
       ? undefined
-      : Math.max(0, selectedPrice - selectedDiscountAmount)
-  ), [selectedPrice, selectedDiscountAmount]);
+      : Math.max(0, selectedPrice - selectedDiscountAmount);
+  }, [selectedStudentId, studentsById, selectedPrice, selectedDiscountAmount]);
 
   const getStudentFinalFee = useCallback((student: Student): number => {
-    if (student.isExempt || !student.grade || !student.subject) return 0;
+    if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
     const price = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
-    return Math.max(0, price - Math.max(0, toFiniteAmount(student.discountAmount)));
+    return Math.max(0, price - getStudentDiscount(student));
+  }, [priceMatrix]);
+
+  const getStudentNetAmountDue = useCallback((student: Student): number => {
+    if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
+    const groupPrice = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
+    return Math.max(0, groupPrice - getStudentDiscount(student));
   }, [priceMatrix]);
 
   const applyAutoRemaining = (paidRaw: string, due: number | undefined) => {
@@ -945,7 +970,7 @@ export default function FinanceTab() {
   }, [filterMonth, filteredPayments, showToast]);
 
   const payingStudents = useMemo(() => {
-    return uniqueStudents.filter((s) => s.grade && s.subject && !s.isExempt);
+    return uniqueStudents.filter((s) => s.grade && s.subject && !isStudentExempt(s));
   }, [uniqueStudents]);
 
   const expectedMonthlyIncome = useMemo(() => {
@@ -953,8 +978,7 @@ export default function FinanceTab() {
     payingStudents.forEach((student) => {
       const price = priceMatrix[priceKey(student.grade!, student.subject!)];
       if (typeof price === 'number' && Number.isFinite(price)) {
-        const discount = student.discountAmount || 0;
-        total += Math.max(0, price - discount);
+        total += Math.max(0, price - getStudentDiscount(student));
       }
     });
     return total;
@@ -1449,7 +1473,7 @@ export default function FinanceTab() {
                 if (st?.grade && subjectForPrice) {
                   const price = priceMatrix[priceKey(st.grade, subjectForPrice)];
                   if (typeof price === 'number' && Number.isFinite(price)) {
-                    const discount = Math.min(price, Number(st?.discountAmount) || 0);
+                    const discount = isStudentExempt(st) ? price : getStudentDiscount(st);
                     setAmountPaid('');
                     setAmountRemaining(String(Math.max(0, price - discount)));
                   }
@@ -1522,7 +1546,7 @@ export default function FinanceTab() {
             سعر الاشتراك (ج.م)
             <input
               type="number"
-              value={selectedPrice ?? ''}
+              value={selectedDue ?? ''}
               readOnly
               tabIndex={-1}
               className={`${INPUT_CLASS} cursor-not-allowed bg-slate-100`}
@@ -1724,7 +1748,8 @@ export default function FinanceTab() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {quickCollectionStudents.map((student) => {
                   const studentPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
-                  const studentDue = Math.max(0, studentPrice - toFiniteAmount(student.discountAmount));
+                  const studentExempt = isStudentExempt(student);
+                  const studentDue = getStudentNetAmountDue(student);
                   const existingPayment = payments.find(p =>
                     p.student_id === student.id &&
                     cleanMonthOption(p.month_name) === cleanMonthOption(monthName) &&
@@ -1752,10 +1777,14 @@ export default function FinanceTab() {
                         {student.group_name || '-'}
                       </td>
                       <td className="p-3 font-bold text-indigo-600">
-                        {studentPrice > 0 ? formatCurrency(studentPrice) : '—'}
+                        {studentDue > 0 ? formatCurrency(studentDue) : studentExempt ? '0 ج.م' : '—'}
                       </td>
                       <td className="p-3">
-                        {monthName.trim() ? (
+                        {studentExempt ? (
+                          <span className="rounded-lg bg-emerald-50 px-2.5 py-1 font-black text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            معفى من المصاريف
+                          </span>
+                        ) : monthName.trim() ? (
                           isPaid ? (
                             <span className="rounded-lg bg-emerald-50 px-2.5 py-1 font-black text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                               مسدد ✓ ({formatCurrency(paidAmount)})
@@ -1798,7 +1827,7 @@ export default function FinanceTab() {
                               onClick={() => {
                                 setSelectedStudentId(String(student.id));
                                 setSelectedSubjectId(student.subject || '');
-                                setAmountPaid(String(studentPrice));
+                                setAmountPaid(String(studentDue));
                                 setAmountRemaining('0');
                                 setTouchedRemaining(false);
                                 document.getElementById('payment-form')?.scrollIntoView({ behavior: 'smooth' });
