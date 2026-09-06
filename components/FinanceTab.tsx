@@ -2277,6 +2277,33 @@ export default function FinanceTab() {
                 className={`${INPUT_CLASS} mt-1.5`}
                 autoFocus
               />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuickPayAmount(String(getStudentNetAmountDue(quickPayStudent)))}
+                  className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-black text-emerald-700 transition hover:bg-emerald-100"
+                >
+                  سداد كامل ({formatCurrency(getStudentNetAmountDue(quickPayStudent))})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickPayAmount('0')}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  بدون دفع (0 ج.م)
+                </button>
+              </div>
+              <div
+                className={`mt-2 rounded-lg px-3 py-2 text-center text-xs font-black ${
+                  Math.max(0, getStudentNetAmountDue(quickPayStudent) - (Number(quickPayAmount) || 0)) === 0
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700'
+                }`}
+              >
+                المتبقي: {formatCurrency(
+                  Math.max(0, getStudentNetAmountDue(quickPayStudent) - (Number(quickPayAmount) || 0))
+                )}
+              </div>
             </label>
             <label className="block text-xs font-bold text-slate-600">
               ملاحظات الدفع
