@@ -256,6 +256,11 @@ export default function FinanceTab() {
     setAmountRemaining(String(remaining));
   };
 
+  const selectedPaidAmount = toFiniteAmount(amountPaid);
+  const selectedRemainingAmount = selectedDue === undefined
+    ? undefined
+    : Math.max(0, selectedDue - selectedPaidAmount);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -360,7 +365,7 @@ export default function FinanceTab() {
     try {
       const studentId = Number(selectedStudentId);
       const paid = amountPaid.trim() === '' ? 0 : Number(amountPaid);
-      const remaining = amountRemaining.trim() === '' ? undefined : Number(amountRemaining);
+      const remaining = selectedRemainingAmount;
       if (!Number.isSafeInteger(studentId) || studentId <= 0) {
         throw new Error('معرف الطالب غير صالح.');
       }
@@ -1615,7 +1620,7 @@ export default function FinanceTab() {
                     setAmountPaid(String(due));
                     setAmountRemaining('0');
                   }}
-                  disabled={selectedDue === undefined}
+                  disabled={selectedDue === undefined || selectedPaidAmount === selectedDue}
                   className="shrink-0 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   دفعة كاملة
@@ -1627,19 +1632,25 @@ export default function FinanceTab() {
                 <span>المبلغ المتبقي (ج.م)</span>
                 <span
                   className={`rounded-lg px-2 py-1 text-[10px] font-black ${
-                    toFiniteAmount(amountRemaining) === 0
+                    selectedRemainingAmount === 0
                       ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-amber-50 text-amber-700'
+                      : selectedPaidAmount > 0
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'bg-rose-50 text-rose-700'
                   }`}
                 >
-                  {toFiniteAmount(amountRemaining) === 0 ? 'مسدد بالكامل' : 'دفعة جزئية'}
+                  {selectedRemainingAmount === 0
+                    ? 'مسدد بالكامل'
+                    : selectedPaidAmount > 0
+                      ? 'دفعة جزئية'
+                      : 'غير مسدد'}
                 </span>
               </span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={amountRemaining}
+                value={selectedRemainingAmount ?? ''}
                 readOnly
                 tabIndex={-1}
                 placeholder="يُحسب تلقائياً = المستحق − المدفوع"
@@ -1768,12 +1779,9 @@ export default function FinanceTab() {
                     (!p.academic_year || p.academic_year === centerSettings.academicYear)
                   );
                   const paidAmount = existingPayment ? toFiniteAmount(existingPayment.amount_paid) : 0;
-                  const remainingAmount = existingPayment
-                    ? existingPayment.amount_remaining == null
-                      ? Math.max(0, studentDue - paidAmount)
-                      : Math.max(0, toFiniteAmount(existingPayment.amount_remaining))
-                    : studentDue;
-                  const isPaid = remainingAmount === 0;
+                  const remainingAmount = Math.max(0, studentDue - paidAmount);
+                  const isPaid = paidAmount >= studentDue;
+                  const isPartial = paidAmount > 0 && paidAmount < studentDue;
                   return (
                     <tr key={student.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40">
                       <td className="p-3 font-bold text-slate-800 dark:text-slate-100">
@@ -1802,8 +1810,12 @@ export default function FinanceTab() {
                               مسدد ✓ ({formatCurrency(paidAmount)})
                             </span>
                           ) : (
-                            <span className="rounded-lg bg-amber-50 px-2.5 py-1 font-black text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
-                              غير مسدد ({formatCurrency(remainingAmount)})
+                            <span className={`rounded-lg px-2.5 py-1 font-black ${
+                              isPartial
+                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                            }`}>
+                              {isPartial ? 'دفعة جزئية' : 'غير مسدد'} ({formatCurrency(remainingAmount)})
                             </span>
                           )
                         ) : (
