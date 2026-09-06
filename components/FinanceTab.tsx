@@ -186,6 +186,11 @@ export default function FinanceTab() {
   const [paidStudentsSearch, setPaidStudentsSearch] = useState('');
   const [showTodayPaymentsModal, setShowTodayPaymentsModal] = useState(false);
   const [todayPaymentsSearch, setTodayPaymentsSearch] = useState('');
+  const [quickPayStudent, setQuickPayStudent] = useState<Student | null>(null);
+  const [quickPayAmount, setQuickPayAmount] = useState('');
+  const [quickPayNotes, setQuickPayNotes] = useState('');
+  const [quickPayOpen, setQuickPayOpen] = useState(false);
+  const [quickPaySubmitting, setQuickPaySubmitting] = useState(false);
   const [showBulkPaymentModal, setShowBulkPaymentModal] = useState(false);
   const [bulkPaymentStage, setBulkPaymentStage] = useState<string>('');
   const [bulkPaymentGrade, setBulkPaymentGrade] = useState<string>('');
@@ -347,6 +352,69 @@ export default function FinanceTab() {
     setAmountRemaining('');
     setTouchedRemaining(false);
   }, []);
+
+  const openQuickPay = useCallback((student: Student, amountDue: number) => {
+    setQuickPayStudent(student);
+    setQuickPayAmount(String(amountDue));
+    setQuickPayNotes('');
+    setQuickPayOpen(true);
+  }, []);
+
+  const closeQuickPay = useCallback(() => {
+    if (quickPaySubmitting) return;
+    setQuickPayOpen(false);
+    setQuickPayStudent(null);
+    setQuickPayAmount('');
+    setQuickPayNotes('');
+  }, [quickPaySubmitting]);
+
+  const handleQuickPaySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!quickPayStudent) return;
+    const netAmountDue = getStudentNetAmountDue(quickPayStudent);
+    const paidAmount = Number(quickPayAmount);
+    if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > netAmountDue) {
+      showToast({ type: 'error', text: 'يرجى إدخال مبلغ صحيح لا يتجاوز المبلغ المستحق.' });
+      return;
+    }
+    const targetMonth = cleanMonthOption(monthName || getCurrentMonthName());
+    const existingPayment = payments.find(
+      (payment) =>
+        payment.student_id === quickPayStudent.id &&
+        cleanMonthOption(payment.month_name) === targetMonth &&
+        (!payment.academic_year || payment.academic_year === centerSettings.academicYear)
+    );
+    setQuickPaySubmitting(true);
+    try {
+      const paymentInput = {
+        student_id: quickPayStudent.id,
+        amount_paid: paidAmount,
+        amount_remaining: Math.max(0, netAmountDue - paidAmount),
+        month_name: targetMonth,
+        academic_year: centerSettings.academicYear,
+      };
+      if (existingPayment) {
+        await updatePayment(existingPayment.id, paymentInput);
+      } else {
+        await addPayment(paymentInput);
+      }
+      await fetchData();
+      setQuickPayOpen(false);
+      setQuickPayStudent(null);
+      setQuickPayAmount('');
+      setQuickPayNotes('');
+      showToast({ type: 'success', text: 'تم تحصيل الدفع وتحديث حالة الطالب بنجاح.' });
+      playSuccessSound();
+    } catch (error: unknown) {
+      const paymentError = error as { message?: string; details?: string | null } | null;
+      showToast({
+        type: 'error',
+        text: paymentError?.message || paymentError?.details || 'تعذر تسجيل الدفع السريع.',
+      });
+    } finally {
+      setQuickPaySubmitting(false);
+    }
+  };
 
   const handleAddPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1850,14 +1918,7 @@ export default function FinanceTab() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => {
-                                setSelectedStudentId(String(student.id));
-                                setSelectedSubjectId(student.subject || '');
-                                setAmountPaid(String(studentDue));
-                                setAmountRemaining('0');
-                                setTouchedRemaining(false);
-                                document.getElementById('payment-form')?.scrollIntoView({ behavior: 'smooth' });
-                              }}
+                              onClick={() => openQuickPay(student, studentDue)}
                               className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs transition shadow-sm"
                             >
                               ⚡ تسديد سريع
@@ -2106,6 +2167,84 @@ export default function FinanceTab() {
           </div>
         )}
       </div>
+
+      {quickPayOpen && quickPayStudent && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={closeQuickPay}
+        >
+          <form
+            className="w-full max-w-md space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
+            dir="rtl"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleQuickPaySubmit}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-800">تسديد سريع</h3>
+                <p className="mt-1 text-xs font-bold text-slate-500">تحصيل الدفع دون مغادرة جدول الطلاب</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeQuickPay}
+                className="rounded-lg px-2 py-1 text-sm font-black text-slate-400 hover:bg-slate-100"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 text-sm">
+              <div className="font-black text-slate-800">{quickPayStudent.name}</div>
+              <div className="mt-1 text-xs font-bold text-slate-500">
+                {quickPayStudent.subject || '-'} / {quickPayStudent.grade || '-'}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-indigo-50 p-3 text-center">
+                <div className="text-[11px] font-bold text-indigo-600">المبلغ المستحق</div>
+                <div className="mt-1 text-lg font-black text-indigo-700">
+                  {formatCurrency(getStudentNetAmountDue(quickPayStudent))}
+                </div>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-3 text-center">
+                <div className="text-[11px] font-bold text-amber-600">الشهر</div>
+                <div className="mt-1 text-sm font-black text-amber-700">
+                  {cleanMonthOption(monthName || getCurrentMonthName())}
+                </div>
+              </div>
+            </div>
+            <label className="block text-xs font-bold text-slate-600">
+              المبلغ المدفوع (ج.م)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={quickPayAmount}
+                onChange={(event) => setQuickPayAmount(event.target.value)}
+                className={`${INPUT_CLASS} mt-1.5`}
+                autoFocus
+              />
+            </label>
+            <label className="block text-xs font-bold text-slate-600">
+              ملاحظات الدفع
+              <textarea
+                value={quickPayNotes}
+                onChange={(event) => setQuickPayNotes(event.target.value)}
+                rows={2}
+                placeholder="ملاحظات اختيارية"
+                className={`${INPUT_CLASS} mt-1.5 resize-none`}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={quickPaySubmitting}
+              className="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {quickPaySubmitting ? 'جارٍ تسجيل الدفع...' : 'تأكيد وتحصيل الدفع'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* ==================== مودال الطلاب المسددين ==================== */}
       {showPaidStudentsModal && (
