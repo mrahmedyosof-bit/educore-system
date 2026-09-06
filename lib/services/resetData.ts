@@ -23,7 +23,7 @@ export async function clearTable(key: ResetTargetKey, notify = true): Promise<vo
   const { error } = await supabase.from(key).delete().gt('id', 0);
   if (error) throw error;
   if (notify && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('educore:data-reset'));
+    setTimeout(() => window.dispatchEvent(new CustomEvent('educore:data-reset')), 0);
   }
 }
 
@@ -33,6 +33,6 @@ export async function clearAllData(): Promise<void> {
     await clearTable(target.key, false);
   }
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('educore:data-reset'));
+    setTimeout(() => window.dispatchEvent(new CustomEvent('educore:data-reset')), 0);
   }
 }

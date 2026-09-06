@@ -665,21 +665,25 @@ function DangerZone() {
 
     setIsClearing(true);
     setMessage(null);
-    startTransition(async () => {
-      try {
-        if (target === 'all') await clearAllData();
-        else await clearTable(target);
+    startTransition(() => {
+      requestAnimationFrame(() => {
+        void (async () => {
+          try {
+            if (target === 'all') await clearAllData();
+            else await clearTable(target);
 
-        setMessage({ ok: true, text: `تم مسح ${targetLabel} بنجاح.` });
-        setConfirmation('');
-      } catch (err) {
-        setMessage({
-          ok: false,
-          text: err instanceof Error ? err.message : 'تعذر تنفيذ عملية المسح.',
-        });
-      } finally {
-        setIsClearing(false);
-      }
+            setMessage({ ok: true, text: `تم مسح ${targetLabel} بنجاح.` });
+            setConfirmation('');
+          } catch (err) {
+            setMessage({
+              ok: false,
+              text: err instanceof Error ? err.message : 'تعذر تنفيذ عملية المسح.',
+            });
+          } finally {
+            setIsClearing(false);
+          }
+        })();
+      });
     });
   };
 
