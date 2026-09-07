@@ -14,6 +14,7 @@ import StudentReportModal from './StudentReportModal';
 import type { Student as ApplicationStudent } from '@/lib/services/students';
 import { normalizeEgyptianPhone, dueReminderMessage } from '@/lib/whatsapp';
 import { getFriendlyErrorMessage } from '@/lib/errors';
+import { calculateNetAmountDue, calculateRemainingAmount } from '@/lib/calculations';
 import WhatsAppButton from './WhatsAppButton';
 import { getPayments, addPayment } from '@/lib/services/payments';
 import { onPaymentUpdate, emitPaymentUpdate } from '@/lib/events';
@@ -232,15 +233,13 @@ export default function StudentsTab() {
     (s: ApplicationStudent): number => {
       if (s.isExempt) return 0;
       const basePrice = priceMatrix[priceKey(s.grade ?? '', s.subject ?? '')] ?? 0;
-      const totalExpected = Math.max(0, basePrice + (s.dueAmount ?? 0) - (s.discountAmount ?? 0));
+      const totalExpected = calculateNetAmountDue(basePrice + s.dueAmount, s.discountAmount);
       if (totalExpected <= 0) return 0;
       const currentMonthNormalized = normalizeMonth(currentMonth);
       const studentPayment = payments.find(
         (p) => p.student_id === s.id && normalizeMonth(p.month_name) === currentMonthNormalized
       );
-      return studentPayment && Number(studentPayment.amount_remaining) > 0
-        ? Number(studentPayment.amount_remaining)
-        : 0;
+      return calculateRemainingAmount(totalExpected, studentPayment?.amount_paid ?? 0);
     },
     [payments, currentMonth, priceMatrix]
   );

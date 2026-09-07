@@ -22,8 +22,6 @@ export interface Student {
   school: string | null;
   guardian_name: string | null;
   guardian_notes: string | null;
-  notes: string | null;
-  tenant_id: string | null;
 }
 
 export interface Attendance {
