@@ -21,7 +21,6 @@ export const calculateFinancialSummary = (
     const amountPaid = toFiniteAmount(payment.amount_paid);
     return sum + (amountPaid > 0 ? amountPaid : 0);
   }, 0);
-
   return {
     totalDue: normalizedDue,
     totalPaid,
@@ -85,5 +84,17 @@ export const calculateAttendanceRate = (attendance: Attendance[] = []): number =
 export const calculateNetAmountDue = (groupPrice: unknown, discount: unknown): number =>
   Math.max(0, toFiniteAmount(groupPrice) - Math.max(0, toFiniteAmount(discount)));
 
-export const calculateRemainingAmount = (netAmountDue: unknown, paidAmount: unknown): number =>
-  Math.max(0, toFiniteAmount(netAmountDue) - Math.max(0, toFiniteAmount(paidAmount)));
+/**
+ * حساب المبلغ المتبقي مع مراعاة الإعفاءات الشهرية
+ * @param netAmountDue - المبلغ المستحق بعد الخصم
+ * @param paidAmount - المبلغ المدفوع
+ * @param isExempted - هل الشهر معفى منه؟ (إذا true فإن المتبقي يكون دائماً 0)
+ */
+export const calculateRemainingAmount = (
+  netAmountDue: unknown,
+  paidAmount: unknown,
+  isExempted: boolean = false
+): number => {
+  if (isExempted) return 0;
+  return Math.max(0, toFiniteAmount(netAmountDue) - Math.max(0, toFiniteAmount(paidAmount)));
+};

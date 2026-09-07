@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useCurriculumSettings } from '@/hooks/useCurriculumSettings';
 import { useCenterSettings } from '@/hooks/useCenterSettings';
 import { openWhatsApp } from '@/lib/whatsapp';
-import { getUniqueStudentsCount, getStudents } from '@/lib/services/students';
+import { getUniqueStudentsCount, getStudents, addExemptedMonth, isMonthExempted } from '@/lib/services/students';
 import { getPriceMatrix, priceKey } from '@/lib/services/settings';
 import { calculateNetAmountDue, calculateRemainingAmount } from '@/lib/calculations';
 import {
@@ -26,6 +26,8 @@ interface Student {
   subject?: string;
   discountAmount?: number;
   isExempt?: boolean;
+  exempted_months?: string[] | null;
+  exemptedMonths?: string[] | null;
 }
 
 interface GroupAttendance {
@@ -107,7 +109,7 @@ const formatDashboardMonth = (value: string): string => {
         return String(arabicIndex >= 0 ? arabicIndex : easternIndex);
       })
       .replace(/[أإآ]/g, 'ا')
-      .replace(/[،؛,_\-.\/|]/g, ' ')
+      .replace(/[،؛,_\-./|]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     const englishMonth = normalized.match(/(January|February|March|April|May|June|July|August|September|October|November|December)/i);
@@ -301,7 +303,8 @@ export default function DashboardTab({
           if (!student) return;
           const price = priceMatrix[priceKey(student.grade || '', student.subject || '')];
           const netAmountDue = calculateNetAmountDue(price, student.discountAmount);
-          const remaining = calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
+          const isExempted = isMonthExempted(student, selectedRevenueMonth);
+          const remaining = isExempted ? 0 : calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
           if (remaining > 0) remainingByStudent.set(studentId, remaining);
         });
 
@@ -437,6 +440,24 @@ export default function DashboardTab({
       }
     },
     [centerSettings.centerName]
+  );
+
+  const handleWaiveMonth = useCallback(
+    async (studentId: number, studentName: string, monthKey: string) => {
+      const confirmMessage = `هل تريد إعفاء الطالب "${studentName}" من مصاريف شهر ${getMonthLabel(monthKey)}؟\n\nسيتم تصفير المبلغ المتبقي وإضافة الشهر لقائمة الإعفاءات.`;
+      if (!window.confirm(confirmMessage)) return;
+
+      try {
+        await addExemptedMonth(studentId, monthKey);
+        setStudentsWithDue(prev => prev.filter(s => s.id !== studentId));
+        await fetchDashboardMetrics(() => false);
+        alert(`✅ تم إعفاء الطالب "${studentName}" من شهر ${getMonthLabel(monthKey)} بنجاح.`);
+      } catch (err) {
+        console.error('Waive Month Error:', err);
+        alert('حدث خطأ أثناء عملية الإعفاء. يرجى المحاولة مرة أخرى.');
+      }
+    },
+    [fetchDashboardMetrics]
   );
 
   const dueGradeOptions = useMemo(
@@ -802,6 +823,13 @@ export default function DashboardTab({
                       <span className="text-xs font-black text-rose-600 dark:text-rose-400 bg-rose-100/80 dark:bg-rose-900/50 px-2 py-1 rounded-md">
                         {student.dueAmount} ج.م
                       </span>
+                      <button
+                        onClick={() => handleWaiveMonth(student.id, student.name, selectedRevenueMonth)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm active:scale-95"
+                        title="إعفاء من هذا الشهر"
+                      >
+                        <span>🎁</span> إعفاء
+                      </button>
                       <span
                         title={
                           phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'
@@ -1022,6 +1050,14 @@ export default function DashboardTab({
                         <span className="rounded-lg bg-rose-100 dark:bg-rose-900/50 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
                           {student.dueAmount} ج.م
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => handleWaiveMonth(student.id, student.name, selectedRevenueMonth)}
+                          className="rounded-lg bg-purple-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-purple-700"
+                          title="إعفاء من الشهر"
+                        >
+                          🎁
+                        </button>
                         <span
                           title={
                             phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'

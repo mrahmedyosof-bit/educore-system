@@ -22,6 +22,7 @@ export interface Student {
   school: string | null;
   guardian_name: string | null;
   guardian_notes: string | null;
+  exempted_months: string[] | null;
 }
 
 export interface Attendance {

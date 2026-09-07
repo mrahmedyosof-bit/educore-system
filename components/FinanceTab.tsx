@@ -7,7 +7,14 @@ import {
   getPayments,
   PaymentRecord as ServicePaymentRecord,
 } from '@/lib/services/payments';
-import { getStudents, getUniqueStudents, Student as BaseStudent } from '@/lib/services/students';
+import {
+  getStudents,
+  getUniqueStudents,
+  Student as BaseStudent,
+  addExemptedMonth,
+  removeExemptedMonth,
+  isMonthExempted,
+} from '@/lib/services/students';
 import { getPriceMatrix, priceKey, type PriceMatrix } from '@/lib/services/settings';
 import { supabase } from '@/lib/supabase';
 import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
@@ -68,6 +75,7 @@ let paymentEventSeq = 0;
 interface PaymentRecord extends ServicePaymentRecord {
   student?: Student;
   month_key?: string;
+  isExempted?: boolean;
 }
 
 const buildPaymentRecord = (
@@ -75,11 +83,14 @@ const buildPaymentRecord = (
   studentsByIdMap: Map<number, Student>
 ): PaymentRecord => {
   const month_key = getMonthKey(payment.month_name);
+  const student = payment.student_id ? studentsByIdMap.get(payment.student_id) : undefined;
+  const isExempted = student && month_key ? isMonthExempted(student, month_key) : false;
   return {
     ...payment,
     month_key,
     month_name: month_key ? getMonthLabel(month_key) : String(payment.month_name ?? ''),
-    student: payment.student_id ? studentsByIdMap.get(payment.student_id) : undefined,
+    student,
+    isExempted,
   };
 };
 
@@ -128,7 +139,10 @@ export default function FinanceTab() {
   const playSuccessSound = useCallback(() => {
     try {
       if (typeof window === 'undefined') return;
-      const windowAudio = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+      const windowAudio = window as unknown as {
+        AudioContext?: typeof AudioContext;
+        webkitAudioContext?: typeof AudioContext;
+      };
       const AudioCtx = windowAudio.AudioContext || windowAudio.webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
@@ -192,14 +206,16 @@ export default function FinanceTab() {
   const [bulkPaymentGroup, setBulkPaymentGroup] = useState<string>('');
   const [bulkPaymentSubject, setBulkPaymentSubject] = useState<string>('');
   const [bulkPaymentMonth, setBulkPaymentMonth] = useState<string>('');
-  const [bulkPaymentStudents, setBulkPaymentStudents] = useState<Array<{
-    student: Student;
-    amountPaid: number;
-    amountRemaining: number;
-    defaultPrice: number;
-    hasPayment: boolean;
-    existingPaymentId?: number;
-  }>>([]);
+  const [bulkPaymentStudents, setBulkPaymentStudents] = useState<
+    Array<{
+      student: Student;
+      amountPaid: number;
+      amountRemaining: number;
+      defaultPrice: number;
+      hasPayment: boolean;
+      existingPaymentId?: number;
+    }>
+  >([]);
   const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
 
   const deferredQuickCollectionSearch = useDeferredValue(quickCollectionSearch);
@@ -224,7 +240,7 @@ export default function FinanceTab() {
     const value = Number(discountValue);
     if (selectedPrice === undefined || !Number.isFinite(value) || value < 0) return 0;
     return discountType === 'percentage'
-      ? selectedPrice * Math.min(100, value) / 100
+      ? (selectedPrice * Math.min(100, value)) / 100
       : Math.min(selectedPrice, value);
   }, [discountType, discountValue, selectedPrice]);
 
@@ -238,17 +254,23 @@ export default function FinanceTab() {
       : Math.max(0, selectedPrice - selectedDiscountAmount);
   }, [selectedStudentId, studentsById, selectedPrice, selectedDiscountAmount]);
 
-  const getStudentFinalFee = useCallback((student: Student): number => {
-    if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
-    const price = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
-    return calculateNetAmountDue(price, getStudentDiscount(student));
-  }, [priceMatrix]);
+  const getStudentFinalFee = useCallback(
+    (student: Student): number => {
+      if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
+      const price = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
+      return calculateNetAmountDue(price, getStudentDiscount(student));
+    },
+    [priceMatrix]
+  );
 
-  const getStudentNetAmountDue = useCallback((student: Student): number => {
-    if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
-    const groupPrice = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
-    return calculateNetAmountDue(groupPrice, getStudentDiscount(student));
-  }, [priceMatrix]);
+  const getStudentNetAmountDue = useCallback(
+    (student: Student): number => {
+      if (isStudentExempt(student) || !student.grade || !student.subject) return 0;
+      const groupPrice = toFiniteAmount(priceMatrix[priceKey(student.grade, student.subject)]);
+      return calculateNetAmountDue(groupPrice, getStudentDiscount(student));
+    },
+    [priceMatrix]
+  );
 
   const applyAutoRemaining = (paidRaw: string, due: number | undefined) => {
     if (due === undefined || touchedRemaining) return;
@@ -258,9 +280,10 @@ export default function FinanceTab() {
   };
 
   const selectedPaidAmount = toFiniteAmount(amountPaid);
-  const selectedRemainingAmount = selectedDue === undefined
-    ? undefined
-    : calculateRemainingAmount(selectedDue, selectedPaidAmount);
+  const selectedRemainingAmount =
+    selectedDue === undefined
+      ? undefined
+      : calculateRemainingAmount(selectedDue, selectedPaidAmount);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,15 +298,11 @@ export default function FinanceTab() {
           getPriceMatrix(),
         ]);
         if (cancelled) return;
-        const studentsByIdMap = new Map(
-          loadedStudents.map((student) => [student.id, student])
-        );
+        const studentsByIdMap = new Map(loadedStudents.map((student) => [student.id, student]));
         setStudents(loadedStudents);
         setUniqueStudents(loadedUniqueStudents);
         setPriceMatrix(prices);
-        setPayments(
-          loadedPayments.map((payment) => buildPaymentRecord(payment, studentsByIdMap))
-        );
+        setPayments(loadedPayments.map((payment) => buildPaymentRecord(payment, studentsByIdMap)));
         setFetching(false);
         setMonthName(getCurrentMonthKey());
       } catch (err: unknown) {
@@ -309,15 +328,11 @@ export default function FinanceTab() {
         getPayments(),
         getPriceMatrix(),
       ]);
-      const studentsByIdMap = new Map(
-        loadedStudents.map((student) => [student.id, student])
-      );
+      const studentsByIdMap = new Map(loadedStudents.map((student) => [student.id, student]));
       setStudents(loadedStudents);
       setUniqueStudents(loadedUniqueStudents);
       setPriceMatrix(prices);
-      setPayments(
-        loadedPayments.map((payment) => buildPaymentRecord(payment, studentsByIdMap))
-      );
+      setPayments(loadedPayments.map((payment) => buildPaymentRecord(payment, studentsByIdMap)));
       return true;
     } catch (err: unknown) {
       console.error('Error fetching data:', err);
@@ -413,8 +428,7 @@ export default function FinanceTab() {
       setQuickPaySubmitting(false);
     }
   };
-
-  const handleAddPayment = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handleAddPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const selectedStudent = selectedStudentId
       ? studentsById.get(Number(selectedStudentId))
@@ -1309,8 +1323,7 @@ export default function FinanceTab() {
 </html>`);
     printWindow.document.close();
   }, [centerSettings.centerName, lastPayment, studentsById]);
-
-  return (
+    return (
     <div className="w-full space-y-6" dir="rtl">
       {/* ==================== شريط إعدادات السنتر ==================== */}
       <div className="rounded-3xl border border-indigo-200/80 bg-gradient-to-l from-indigo-50 to-white p-6 shadow-sm dark:border-indigo-800 dark:from-slate-900 dark:to-slate-800">
@@ -1915,7 +1928,6 @@ export default function FinanceTab() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {quickCollectionStudents.map((student) => {
-                  const studentPrice = priceMatrix[priceKey(student.grade || '', student.subject || '')] || 0;
                   const studentExempt = isStudentExempt(student);
                   const studentDue = getStudentNetAmountDue(student);
                   const targetMonthKey = getMonthKey(monthName || currentMonthKey);
@@ -2243,6 +2255,7 @@ export default function FinanceTab() {
         )}
       </div>
 
+      {/* ==================== مودال التسديد السريع ==================== */}
       {quickPayOpen && quickPayStudent && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
@@ -2738,6 +2751,7 @@ export default function FinanceTab() {
         </div>
       )}
 
+      {/* ==================== مودال إلغاء المديونية ==================== */}
       {zeroDebtOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
@@ -2774,6 +2788,7 @@ export default function FinanceTab() {
         </div>
       )}
 
+      {/* ==================== مودال حذف سجلات الشهر ==================== */}
       {purgeMonthOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm"
@@ -2810,6 +2825,7 @@ export default function FinanceTab() {
         </div>
       )}
 
+      {/* ==================== مودال إلغاء مدفوعات الشهر ==================== */}
       {resetPaymentsOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
