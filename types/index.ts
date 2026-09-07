@@ -2,7 +2,7 @@ export interface Student {
   id: number;
   name: string;
   phone: string | null;
-  parent_phone: string;
+  parent_phone: string | null;
   group_name: string | null;
   created_at: string | null;
   grade: string | null;
@@ -20,7 +20,10 @@ export interface Student {
   is_exempt: boolean | null;
   address: string | null;
   school: string | null;
+  guardian_name: string | null;
   guardian_notes: string | null;
+  notes: string | null;
+  tenant_id: string | null;
 }
 
 export interface Attendance {

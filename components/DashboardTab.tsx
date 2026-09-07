@@ -127,6 +127,14 @@ const formatDashboardMonth = (value: string): string => {
   return cleanMonthOption(`${englishMonth} ${year}`);
 };
 
+const formatDashboardMonthName = (value: string): string => {
+  const [year, month] = value.split('-').map(Number);
+  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || month < 1 || month > 12) {
+    return cleanMonthOption(value).replace(/\s+\d{4}$/, '');
+  }
+  return new Date(year, month - 1, 1).toLocaleString('ar-EG-u-nu-latn', { month: 'long' });
+};
+
 const dashboardMonthOptions = Array.from({ length: 24 }, (_, index) => {
   const date = new Date();
   date.setMonth(date.getMonth() - 12 + index, 1);
@@ -467,7 +475,7 @@ export default function DashboardTab({
     },
     {
       key: 'collectedAmount',
-      label: `إيرادات شهر ${formatDashboardMonth(selectedRevenueMonth)}`,
+      label: `إيرادات شهر ${formatDashboardMonthName(selectedRevenueMonth)}`,
       value: loading ? '...' : collectedAmount.toLocaleString('en-US'),
       subLabel: 'اضغط لعرض التفاصيل ↗',
       icon: '💵',

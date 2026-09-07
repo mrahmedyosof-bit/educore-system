@@ -68,11 +68,22 @@ export function useAttendance(): UseAttendanceReturn {
     return () => { mountedRef.current = false; };
   }, []);
 
-  const refetch = useCallback(async () => {
+  const fetchAttendanceData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getAttendance();
+      return data;
+    } catch (err: unknown) {
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refetch = useCallback(async () => {
+    try {
+      const data = await fetchAttendanceData();
       if (mountedRef.current) {
         // Merge server data with optimistic updates
         const serverRecords = data;
@@ -86,16 +97,22 @@ export function useAttendance(): UseAttendanceReturn {
         const message = err instanceof Error ? err.message : 'خطأ غير معروف';
         setError(`فشل في تحميل بيانات الحضور: ${message}`);
       }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
     }
-  }, [optimisticState]);
+  }, [fetchAttendanceData, optimisticState]);
+
+  const refetchRef = useRef(refetch);
+  useEffect(() => {
+    refetchRef.current = refetch;
+  }, [refetch]);
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    refetchRef.current();
+  }, []);
 
   const applyOptimisticUpdate = useCallback((record: AttendanceRecord) => {
     setOptimisticState(prev => {
@@ -162,7 +179,7 @@ export function useAttendance(): UseAttendanceReturn {
       setError(`فشل في تسجيل الحضور: ${message}`);
       throw err;
     }
-  }, [refetch]);
+  }, [refetch, applyOptimisticUpdate]);
 
   const createAttendanceBulk = useCallback(async (inputs: {
     student_id: number;
@@ -223,7 +240,7 @@ export function useAttendance(): UseAttendanceReturn {
       setError(`فشل في تحديث الحضور: ${message}`);
       throw err;
     }
-  }, [records, optimisticState, refetch]);
+  }, [records, optimisticState, refetch, applyOptimisticUpdate]);
 
   const updateAttendanceRecordById = useCallback(async (
     id: number,
@@ -253,7 +270,7 @@ export function useAttendance(): UseAttendanceReturn {
       setError(`فشل في تحديث سجل الحضور: ${message}`);
       throw err;
     }
-  }, [records, optimisticState, refetch]);
+  }, [records, optimisticState, refetch, applyOptimisticUpdate]);
 
   const deleteAttendanceRecord = useCallback(async (id: number) => {
     setError(null);

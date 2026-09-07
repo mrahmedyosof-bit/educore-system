@@ -1,7 +1,6 @@
-import { createClient } from '@/lib/supabase/client' // اضبط مسار Supabase Client الخاص بك
+import { supabase } from '@/lib/supabase'
 
 export async function createNewTenant(tenantName: string, slug: string) {
-  const supabase = createClient()
 
   // 1. التأكد من وجود مستخدم مسجل الدخول
   const { data: { user }, error: userError } = await supabase.auth.getUser()

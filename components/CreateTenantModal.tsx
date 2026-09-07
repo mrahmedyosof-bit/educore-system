@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createNewTenant } from '@/lib/actions/tenant'
+import { createNewTenant } from '@/lib/tenant'
 
 export default function CreateTenantModal({ onSuccess }: { onSuccess?: () => void }) {
   const [name, setName] = useState('')

@@ -1,0 +1,202 @@
+
+> educore-system@0.1.0 lint
+> eslint .
+
+
+C:\Users\mr ahmed\Desktop\educore-system\app\SubscriptionsPage.tsx
+  20:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\app\layout.tsx
+  13:48  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\app\page.tsx
+  22:5  error  Parsing error: Unexpected token <
+
+C:\Users\mr ahmed\Desktop\educore-system\components\AppContext.tsx
+  24:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\AttendanceTab.tsx
+  14:28  error  Parsing error: Unexpected token PaymentRecord
+
+C:\Users\mr ahmed\Desktop\educore-system\components\AuthContext.tsx
+  4:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\components\CreateTenantModal.tsx
+  6:56  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\components\DashboardTab.tsx
+  11:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\ExamsTab.tsx
+  11:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\ExpensesTab.tsx
+  12:41  error  Parsing error: Unexpected token PriceMatrix
+
+C:\Users\mr ahmed\Desktop\educore-system\components\ExportButtons.tsx
+  6:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\FinanceTab.tsx
+  10:41  error  Parsing error: Unexpected token PriceMatrix
+
+C:\Users\mr ahmed\Desktop\educore-system\components\GradesTab.tsx
+  11:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\InventoryTab.tsx
+  18:55  error  Parsing error: Unexpected token ]
+
+C:\Users\mr ahmed\Desktop\educore-system\components\LiveClock.tsx
+  27:12  error  Parsing error: Unexpected token <
+
+C:\Users\mr ahmed\Desktop\educore-system\components\Navigation.tsx
+  16:8  error  Parsing error: Unexpected token Role
+
+C:\Users\mr ahmed\Desktop\educore-system\components\QRScanner.tsx
+  6:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\ReportsTab.tsx
+  8:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\SetupTab.tsx
+  5:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\components\StudentCardModal.tsx
+  5:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\StudentReportModal.tsx
+  5:44  error  Parsing error: Unexpected token Exam
+
+C:\Users\mr ahmed\Desktop\educore-system\components\StudentsTab.tsx
+  2:84  error  Parsing error: Unexpected token ChangeEvent
+
+C:\Users\mr ahmed\Desktop\educore-system\components\TenantContext.tsx
+  13:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\components\ThemeContext.tsx
+  5:6  error  Parsing error: Unexpected token Theme
+
+C:\Users\mr ahmed\Desktop\educore-system\components\WhatsAppButton.tsx
+  6:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\attendance\AttendanceTab.tsx
+  16:28  error  Parsing error: Unexpected token PaymentRecord
+
+C:\Users\mr ahmed\Desktop\educore-system\components\attendance\GroupAttendanceGrid.tsx
+  9:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\attendance\StudentRow.tsx
+  8:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\attendance\constants.ts
+  1:70  error  Parsing error: Unexpected token as
+
+C:\Users\mr ahmed\Desktop\educore-system\components\finance\FinanceTab.tsx
+  11:41  error  Parsing error: Unexpected token PriceMatrix
+
+C:\Users\mr ahmed\Desktop\educore-system\components\finance\KPICards.tsx
+  6:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\finance\PaymentsTable.tsx
+  9:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\components\finance\constants.ts
+  7:3  error  Parsing error: Unexpected token as
+
+C:\Users\mr ahmed\Desktop\educore-system\components\finance\types.ts
+  1:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\eslint.config.cjs
+  1:1  error  Parsing error: 'import' and 'export' may appear only with 'sourceType: module'
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\useAttendance.ts
+  17:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\useCenterSettings.ts
+  5:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\useCurriculumSettings.ts
+  12:8  error  Parsing error: Unexpected token PriceMatrix
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\usePayments.ts
+  12:1  error  Parsing error: The keyword 'interface' is reserved
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\useSubscription.ts
+  4:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\calculations.ts
+  3:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\errors.ts
+  6:6  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\events.ts
+  12:21  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\exportUtils.ts
+  6:35  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\permissions.ts
+  1:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\rbac.ts
+  15:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\attendance.ts
+  2:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\auditLog.ts
+  9:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\exams.ts
+  3:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\expenses.ts
+  3:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\grades.ts
+  2:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\materials.ts
+  3:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\payments.ts
+  2:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\resetData.ts
+  18:3  error  Parsing error: Unexpected token as
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\settings.ts
+  3:8  error  Parsing error: Unexpected token type
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\services\students.ts
+  2:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\supabase.ts
+  2:8  error  Parsing error: Unexpected token type
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\tenant.ts
+  3:49  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\tenant\scope.ts
+  18:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\lib\whatsapp.ts
+  10:45  error  Parsing error: Unexpected token :
+
+C:\Users\mr ahmed\Desktop\educore-system\middleware.ts
+  2:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\next.config.ts
+  1:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\tailwind.config.ts
+  1:13  error  Parsing error: Unexpected token {
+
+C:\Users\mr ahmed\Desktop\educore-system\types\index.ts
+  1:8  error  Parsing error: Unexpected token interface
+
+C:\Users\mr ahmed\Desktop\educore-system\types\tenant.ts
+  8:8  error  Parsing error: Unexpected token type
+
+✖ 65 problems (65 errors, 0 warnings)
+

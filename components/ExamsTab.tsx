@@ -59,9 +59,23 @@ export default function ExamsTab() {
   // ═══════════════════════════════════════════════════════════
   // States الرئيسية
   // ═══════════════════════════════════════════════════════════
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [examResults, setExamResults] = useState<ExamResult[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [exams, setExams] = useState<Exam[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.exams);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [examResults, setExamResults] = useState<ExamResult[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.results);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('grading');
 
