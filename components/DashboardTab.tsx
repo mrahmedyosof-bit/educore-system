@@ -7,6 +7,13 @@ import { openWhatsApp } from '@/lib/whatsapp';
 import { getUniqueStudentsCount, getStudents } from '@/lib/services/students';
 import { getPriceMatrix, priceKey } from '@/lib/services/settings';
 import { calculateNetAmountDue, calculateRemainingAmount } from '@/lib/calculations';
+import {
+  getMonthKey,
+  getMonthLabel,
+  getCurrentMonthKey,
+  getSubscriptionMonthOptions,
+  type MonthOption,
+} from '@/lib/month';
 
 interface Student {
   id: number;
@@ -87,87 +94,82 @@ const attendanceBadgeClass = (pct: number): string => {
   return 'text-slate-500 bg-slate-200/60 dark:bg-slate-800';
 };
 
-const cleanMonthOption = (value: string): string => {
-  const monthNames: Record<string, string> = {
-    January: 'يناير',
-    February: 'فبراير',
-    March: 'مارس',
-    April: 'أبريل',
-    May: 'مايو',
-    June: 'يونيو',
-    July: 'يوليو',
-    August: 'أغسطس',
-    September: 'سبتمبر',
-    October: 'أكتوبر',
-    November: 'نوفمبر',
-    December: 'ديسمبر',
-  };
-
-  return value
-    .replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, (month) => monthNames[month])
-    .replace(/[٠-٩۰-۹]/g, (digit) => {
-      const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-      const easternDigits = '۰۱۲۳۴۵۶۷۸۹';
-      const arabicIndex = arabicDigits.indexOf(digit);
-      const easternIndex = easternDigits.indexOf(digit);
-      return String(arabicIndex >= 0 ? arabicIndex : easternIndex);
-    })
-    .replace(/[أإآ]/g, 'ا')
-    .replace(/[,،\-_\.]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
 const formatDashboardMonth = (value: string): string => {
-  const [year, month] = value.split('-').map(Number);
-  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || month < 1 || month > 12) {
-    return cleanMonthOption(value);
+  const key = getMonthKey(value);
+  if (!key) {
+    const normalized = String(value ?? '')
+      .normalize('NFKC')
+      .replace(/[٠-٩۰-۹]/g, (digit) => {
+        const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+        const easternDigits = '۰۱۲۳۴۵۶۷۸۹';
+        const arabicIndex = arabicDigits.indexOf(digit);
+        const easternIndex = easternDigits.indexOf(digit);
+        return String(arabicIndex >= 0 ? arabicIndex : easternIndex);
+      })
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/[،؛,_\-.\/|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const englishMonth = normalized.match(/(January|February|March|April|May|June|July|August|September|October|November|December)/i);
+    if (englishMonth) {
+      const monthNames: Record<string, string> = {
+        January: 'يناير',
+        February: 'فبراير',
+        March: 'مارس',
+        April: 'أبريل',
+        May: 'مايو',
+        June: 'يونيو',
+        July: 'يوليو',
+        August: 'أغسطس',
+        September: 'سبتمبر',
+        October: 'أكتوبر',
+        November: 'نوفمبر',
+        December: 'ديسمبر',
+      };
+      return normalized.replace(
+        /(January|February|March|April|May|June|July|August|September|October|November|December)/gi,
+        (month) => monthNames[month.charAt(0).toUpperCase() + month.slice(1)] || month
+      );
+    }
+    return normalized;
   }
-  const englishMonth = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' });
-  return cleanMonthOption(`${englishMonth} ${year}`);
+  return getMonthLabel(key);
 };
 
 const formatDashboardMonthName = (value: string): string => {
-  const [year, month] = value.split('-').map(Number);
-  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || month < 1 || month > 12) {
-    return cleanMonthOption(value).replace(/\s+\d{4}$/, '');
-  }
-  return new Date(year, month - 1, 1).toLocaleString('ar-EG-u-nu-latn', { month: 'long' });
+  const label = formatDashboardMonth(value);
+  return label.replace(/\s+\d{4}$/, '');
 };
 
-const dashboardMonthOptions = Array.from({ length: 24 }, (_, index) => {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 12 + index, 1);
-  const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-  return { value, label: date.toLocaleString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' }) };
-});
+const paymentTargetMonthKey = (payment: {
+  month_name?: string | null;
+  target_month?: string | null;
+  month?: string | null;
+}): string => {
+  const monthValue = payment.target_month || payment.month || payment.month_name;
+  return getMonthKey(monthValue);
+};
 
-const orderedDashboardMonthOptions = [
+const dashboardMonthOptions: MonthOption[] = getSubscriptionMonthOptions(
+  `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
+);
+
+const orderedDashboardMonthOptions: MonthOption[] = [
   { value: '2026-08', label: 'أغسطس 2026' },
   { value: '2026-09', label: 'سبتمبر 2026' },
-  ...dashboardMonthOptions.filter((month) => month.value !== '2026-08' && month.value !== '2026-09'),
+  ...dashboardMonthOptions.filter(
+    (month) => month.value !== '2026-08' && month.value !== '2026-09'
+  ),
 ];
-
-const targetMonthKey = (value: string | null | undefined): string => {
-  const normalized = cleanMonthOption(String(value ?? ''));
-  const numericMatch = normalized.match(/(\d{4})\s+(\d{1,2})$/);
-  if (numericMatch) return `${numericMatch[1]}-${numericMatch[2].padStart(2, '0')}`;
-  const year = normalized.match(/\d{4}/)?.[0];
-  const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-  const monthIndex = monthNames.findIndex((month) => normalized.includes(month));
-  return year && monthIndex >= 0 ? `${year}-${String(monthIndex + 1).padStart(2, '0')}` : '';
-};
-
-const paymentTargetMonthKey = (payment: { month_name?: string | null; target_month?: string | null; month?: string | null }): string =>
-  targetMonthKey(payment.target_month || payment.month || payment.month_name);
 
 export default function DashboardTab({
   onOpenQRScanner,
   onNavigateToTab,
 }: DashboardTabProps) {
   const { settings: centerSettings } = useCenterSettings();
+
   const [selectedRevenueMonth, setSelectedRevenueMonth] = useState<string>(
-    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    getCurrentMonthKey()
   );
   const [totalStudents, setTotalStudents] = useState<number>(0);
   const [collectedAmount, setCollectedAmount] = useState<number>(0);
@@ -182,6 +184,7 @@ export default function DashboardTab({
   const [collectQuery, setCollectQuery] = useState('');
   const [dueSearchQuery, setDueSearchQuery] = useState('');
   const [dueSelectedGrade, setDueSelectedGrade] = useState('الكل');
+
   const deferredDueSearchQuery = useDeferredValue(dueSearchQuery);
   const deferredCollectQuery = useDeferredValue(collectQuery);
 
@@ -195,192 +198,205 @@ export default function DashboardTab({
     addItem,
   } = useCurriculumSettings();
 
-  const fetchDashboardMetrics = useCallback(async (cancelled: () => boolean) => {
-    try {
-      const uniqueStudentsCount = await getUniqueStudentsCount();
-      if (!cancelled()) setTotalStudents(uniqueStudentsCount);
+  const fetchDashboardMetrics = useCallback(
+    async (cancelled: () => boolean) => {
+      try {
+        const uniqueStudentsCount = await getUniqueStudentsCount();
+        if (!cancelled()) setTotalStudents(uniqueStudentsCount);
 
-      const todayDate = new Date().toISOString().split('T')[0];
-      const [{ data: todayAttendance, error: attendanceError }, { data: allStudents, error: studentsListError }] =
-        await Promise.all([
-          supabase.from('attendance').select('student_id, status').eq('date', todayDate),
-          supabase.from('students').select('id, group_name, grade_level'),
-        ]);
+        const todayDate = new Date().toISOString().split('T')[0];
 
-      if (attendanceError) throw attendanceError;
-      if (studentsListError) throw studentsListError;
+        const [{ data: todayAttendance, error: attendanceError }, { data: allStudents, error: studentsListError }] =
+          await Promise.all([
+            supabase.from('attendance').select('student_id, status').eq('date', todayDate),
+            supabase.from('students').select('id, group_name, grade_level'),
+          ]);
 
-      const attendanceRows = (todayAttendance as { student_id: number | null; status: string | null }[] | null) ?? [];
-      const studentRows = (allStudents as { id: number; group_name: string | null; grade_level: string | null }[] | null) ?? [];
+        if (attendanceError) throw attendanceError;
+        if (studentsListError) throw studentsListError;
 
-      if (!cancelled()) setTodayAttendanceCount(attendanceRows.length);
+        const attendanceRows =
+          (todayAttendance as { student_id: number | null; status: string | null }[] | null) ?? [];
+        const studentRows =
+          (allStudents as { id: number; group_name: string | null; grade_level: string | null }[] | null) ?? [];
 
-      const attendedIds = new Set(
-        attendanceRows
-          .filter((r) => r.student_id != null && (r.status || '').toUpperCase() !== 'ABSENT')
-          .map((r) => r.student_id as number)
-      );
+        if (!cancelled()) setTodayAttendanceCount(attendanceRows.length);
 
-      const groupsMap = new Map<string, GroupAttendance>();
-      for (const s of studentRows) {
-        const baseGroup = s.group_name || 'بدون مجموعة';
-        const gradeShort = shortenGradeLabel(s.grade_level);
-        const groupName = gradeShort ? `${baseGroup} - ${gradeShort}` : baseGroup;
-        const entry = groupsMap.get(groupName) ?? { groupName, attendedCount: 0, totalCount: 0 };
-        entry.totalCount += 1;
-        if (attendedIds.has(s.id)) entry.attendedCount += 1;
-        groupsMap.set(groupName, entry);
-      }
-
-      if (!cancelled()) {
-        setGroupSessions(
-          Array.from(groupsMap.values()).sort((a, b) => b.attendedCount - a.attendedCount)
+        const attendedIds = new Set(
+          attendanceRows
+            .filter((r) => r.student_id != null && (r.status || '').toUpperCase() !== 'ABSENT')
+            .map((r) => r.student_id as number)
         );
-      }
 
-      const allStudentsData = await getStudents();
-      const priceMatrix = await getPriceMatrix();
-      const eligibleStudentIds = new Set(
-        allStudentsData
-          .filter((student) => {
-            if (student.isExempt || !student.grade || !student.subject) return false;
-            const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
-            const discount = Number(student.discountAmount ?? 0);
-            const finalFee = calculateNetAmountDue(price, discount);
-            return Number.isFinite(price) && finalFee > 0;
-          })
-          .map((student) => student.id)
-      );
-      let expectedTotal = 0;
-      allStudentsData.forEach((student) => {
-        if (student.grade && student.subject && !student.isExempt) {
-          const price = priceMatrix[priceKey(student.grade, student.subject)];
-          if (typeof price === 'number' && Number.isFinite(price)) {
-            const discount = student.discountAmount || 0;
-            expectedTotal += calculateNetAmountDue(price, discount);
+        const groupsMap = new Map<string, GroupAttendance>();
+        for (const s of studentRows) {
+          const baseGroup = s.group_name || 'بدون مجموعة';
+          const gradeShort = shortenGradeLabel(s.grade_level);
+          const groupName = gradeShort ? `${baseGroup} - ${gradeShort}` : baseGroup;
+          const entry = groupsMap.get(groupName) ?? { groupName, attendedCount: 0, totalCount: 0 };
+          entry.totalCount += 1;
+          if (attendedIds.has(s.id)) entry.attendedCount += 1;
+          groupsMap.set(groupName, entry);
+        }
+
+        if (!cancelled()) {
+          setGroupSessions(
+            Array.from(groupsMap.values()).sort((a, b) => b.attendedCount - a.attendedCount)
+          );
+        }
+
+        const allStudentsData = await getStudents();
+        const priceMatrix = await getPriceMatrix();
+
+        const eligibleStudentIds = new Set(
+          allStudentsData
+            .filter((student) => {
+              if (student.isExempt || !student.grade || !student.subject) return false;
+              const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
+              const discount = Number(student.discountAmount ?? 0);
+              const finalFee = calculateNetAmountDue(price, discount);
+              return Number.isFinite(price) && finalFee > 0;
+            })
+            .map((student) => student.id)
+        );
+
+        let expectedTotal = 0;
+        allStudentsData.forEach((student) => {
+          if (student.grade && student.subject && !student.isExempt) {
+            const price = priceMatrix[priceKey(student.grade, student.subject)];
+            if (typeof price === 'number' && Number.isFinite(price)) {
+              const discount = student.discountAmount || 0;
+              expectedTotal += calculateNetAmountDue(price, discount);
+            }
+          }
+        });
+
+        if (!cancelled()) setExpectedRevenue(expectedTotal);
+
+        const paymentsQuery = supabase
+          .from('payments')
+          .select('amount_paid, amount_remaining, month_name, created_at, student_id');
+
+        const { data: paymentsData, error: paymentsError } = await paymentsQuery;
+        if (paymentsError) throw paymentsError;
+
+        const selectedMonthPayments = (paymentsData ?? []).filter(
+          (payment) => paymentTargetMonthKey(payment) === selectedRevenueMonth
+        );
+
+        const studentsById = new Map(allStudentsData.map((student) => [student.id, student]));
+        const paidByStudent = new Map<number, number>();
+
+        selectedMonthPayments.forEach((payment) => {
+          if (payment.student_id == null) return;
+          paidByStudent.set(
+            payment.student_id,
+            (paidByStudent.get(payment.student_id) ?? 0) + (Number(payment.amount_paid) || 0)
+          );
+        });
+
+        const remainingByStudent = new Map<number, number>();
+        eligibleStudentIds.forEach((studentId) => {
+          const student = studentsById.get(studentId);
+          if (!student) return;
+          const price = priceMatrix[priceKey(student.grade || '', student.subject || '')];
+          const netAmountDue = calculateNetAmountDue(price, student.discountAmount);
+          const remaining = calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
+          if (remaining > 0) remainingByStudent.set(studentId, remaining);
+        });
+
+        const studentIds = Array.from(remainingByStudent.keys());
+        let studentsMap = new Map<number, DueStudent>();
+
+        if (studentIds.length > 0) {
+          const { data: studentsData, error: studentsError } = await supabase
+            .from('students')
+            .select('id, name, parent_phone, phone, grade_level')
+            .in('id', studentIds);
+          if (studentsError) throw studentsError;
+          studentsMap = new Map((studentsData ?? []).map((s) => [s.id, s as DueStudent]));
+        }
+
+        let sumCollected = 0;
+        let sumRemaining = 0;
+        const dueMap: Record<number, DueStudent> = {};
+
+        (
+          selectedMonthPayments as {
+            amount_paid: number | null;
+            amount_remaining: number | null;
+            student_id: number | null;
+          }[]
+        ).forEach((p) => {
+          const paid = Number(p.amount_paid) || 0;
+          sumCollected += paid;
+        });
+
+        remainingByStudent.forEach((remaining, studentId) => {
+          sumRemaining += remaining;
+          const studentData = studentsMap.get(studentId);
+          if (studentData) {
+            dueMap[studentId] = {
+              ...studentData,
+              dueAmount: remaining,
+            };
+          }
+        });
+
+        if (!cancelled()) {
+          setCollectedAmount(sumCollected);
+          setTotalDueAmount(sumRemaining);
+          setStudentsWithDue(Object.values(dueMap));
+        }
+
+        const recentPayments = selectedMonthPayments
+          .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          .slice(0, 5);
+
+        const recentAttendance = attendanceRows.filter((r) => r.student_id != null).slice(0, 5);
+
+        const activities: ActivityItem[] = [];
+
+        for (const payment of recentPayments) {
+          const studentData = studentsMap.get(payment.student_id);
+          if (studentData) {
+            activities.push({
+              id: `payment-${payment.student_id}-${payment.created_at}`,
+              type: 'payment',
+              description: 'سداد اشتراك',
+              amount: Number(payment.amount_paid) || 0,
+              studentName: studentData.name,
+              timestamp: payment.created_at,
+            });
           }
         }
-      });
 
-      if (!cancelled()) setExpectedRevenue(expectedTotal);
-
-      const paymentsQuery = supabase
-        .from('payments')
-        .select('amount_paid, amount_remaining, month_name, created_at, student_id');
-
-      const { data: paymentsData, error: paymentsError } = await paymentsQuery;
-      if (paymentsError) throw paymentsError;
-
-      const selectedMonthPayments = (paymentsData ?? []).filter(
-        (payment) => paymentTargetMonthKey(payment) === selectedRevenueMonth
-      );
-
-      const studentsById = new Map(allStudentsData.map((student) => [student.id, student]));
-      const paidByStudent = new Map<number, number>();
-      selectedMonthPayments.forEach((payment) => {
-        if (payment.student_id == null) return;
-        paidByStudent.set(
-          payment.student_id,
-          (paidByStudent.get(payment.student_id) ?? 0) + (Number(payment.amount_paid) || 0)
-        );
-      });
-      const remainingByStudent = new Map<number, number>();
-      eligibleStudentIds.forEach((studentId) => {
-        const student = studentsById.get(studentId);
-        if (!student) return;
-        const price = priceMatrix[priceKey(student.grade || '', student.subject || '')];
-        const netAmountDue = calculateNetAmountDue(price, student.discountAmount);
-        const remaining = calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
-        if (remaining > 0) remainingByStudent.set(studentId, remaining);
-      });
-
-      const studentIds = Array.from(remainingByStudent.keys());
-      let studentsMap = new Map<number, DueStudent>();
-
-      if (studentIds.length > 0) {
-        const { data: studentsData, error: studentsError } = await supabase
-          .from('students')
-          .select('id, name, parent_phone, phone, grade_level')
-          .in('id', studentIds);
-        if (studentsError) throw studentsError;
-        studentsMap = new Map(
-          (studentsData ?? []).map((s) => [s.id, s as DueStudent])
-        );
-      }
-
-      let sumCollected = 0;
-      let sumRemaining = 0;
-      const dueMap: Record<number, DueStudent> = {};
-
-      (selectedMonthPayments as { amount_paid: number | null; amount_remaining: number | null; student_id: number | null }[]).forEach((p) => {
-        const paid = Number(p.amount_paid) || 0;
-        sumCollected += paid;
-      });
-      remainingByStudent.forEach((remaining, studentId) => {
-        sumRemaining += remaining;
-        const studentData = studentsMap.get(studentId);
-        if (studentData) {
-          dueMap[studentId] = {
-            ...studentData,
-            dueAmount: remaining,
-          };
+        for (const attendance of recentAttendance) {
+          const student = allStudentsData.find((s) => s.id === attendance.student_id);
+          if (student) {
+            activities.push({
+              id: `attendance-${attendance.student_id}-${todayDate}`,
+              type: 'attendance',
+              description: `حضور: ${attendance.status || 'حاضر'}`,
+              studentName: student.name,
+              timestamp: new Date().toISOString(),
+            });
+          }
         }
-      });
 
-      if (!cancelled()) {
-        setCollectedAmount(sumCollected);
-        setTotalDueAmount(sumRemaining);
-        setStudentsWithDue(Object.values(dueMap));
-      }
+        activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-      const recentPayments = selectedMonthPayments
-        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-        .slice(0, 5);
-
-      const recentAttendance = attendanceRows
-        .filter((r) => r.student_id != null)
-        .slice(0, 5);
-
-      const activities: ActivityItem[] = [];
-
-      for (const payment of recentPayments) {
-        const studentData = studentsMap.get(payment.student_id);
-        if (studentData) {
-          activities.push({
-            id: `payment-${payment.student_id}-${payment.created_at}`,
-            type: 'payment',
-            description: 'سداد اشتراك',
-            amount: Number(payment.amount_paid) || 0,
-            studentName: studentData.name,
-            timestamp: payment.created_at,
-          });
+        if (!cancelled()) {
+          setRecentActivities(activities.slice(0, 8));
         }
+      } catch (err) {
+        console.error('Error fetching dashboard metrics:', err);
+      } finally {
+        if (!cancelled()) setLoading(false);
       }
-
-      for (const attendance of recentAttendance) {
-        const student = allStudentsData.find((s) => s.id === attendance.student_id);
-        if (student) {
-          activities.push({
-            id: `attendance-${attendance.student_id}-${todayDate}`,
-            type: 'attendance',
-            description: `حضور: ${attendance.status || 'حاضر'}`,
-            studentName: student.name,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
-
-      activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      if (!cancelled()) {
-        setRecentActivities(activities.slice(0, 8));
-      }
-    } catch (err) {
-      console.error('Error fetching dashboard metrics:', err);
-    } finally {
-      if (!cancelled()) setLoading(false);
-    }
-  }, [selectedRevenueMonth]);
+    },
+    [selectedRevenueMonth]
+  );
 
   useEffect(() => {
     let cancelledFlag = false;
@@ -405,20 +421,23 @@ export default function DashboardTab({
     };
   }, [fetchDashboardMetrics]);
 
-  const handleSendWhatsApp = useCallback((parentPhone: string, studentName: string, amount: number) => {
-    if (!parentPhone) {
-      alert('رقم ولي الأمر غير متوفر.');
-      return;
-    }
-    const message = [
-      `أهلاً بك، تذكير من ${centerSettings.centerName}:`,
-      `المتبقي على الطالب/طالبة (${studentName}) مبلغ (${amount} ج.م).`,
-      `يرجى التكرم بالسداد في أقرب وقت. شكراً لتعاونكم 🌹`,
-    ].join('\n');
-    if (!openWhatsApp(parentPhone, message)) {
-      alert('رقم ولي الأمر غير صالح للواتساب.');
-    }
-  }, [centerSettings.centerName]);
+  const handleSendWhatsApp = useCallback(
+    (parentPhone: string, studentName: string, amount: number) => {
+      if (!parentPhone) {
+        alert('رقم ولي الأمر غير متوفر.');
+        return;
+      }
+      const message = [
+        `أهلاً بك، تذكير من ${centerSettings.centerName}:`,
+        `المتبقي على الطالب/طالبة (${studentName}) مبلغ (${amount} ج.م).`,
+        `يرجى التكرم بالسداد في أقرب وقت. شكراً لتعاونكم 🌹`,
+      ].join('\n');
+      if (!openWhatsApp(parentPhone, message)) {
+        alert('رقم ولي الأمر غير صالح للواتساب.');
+      }
+    },
+    [centerSettings.centerName]
+  );
 
   const dueGradeOptions = useMemo(
     () =>
@@ -524,10 +543,16 @@ export default function DashboardTab({
       <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
-            <span className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-base">⚡</span>
+            <span className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-base">
+              ⚡
+            </span>
             <div>
-              <h3 className="font-bold text-slate-900 dark:text-white text-sm">الإجراءات والعمليات السريعة</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">الوصول الفوري وأداء المهام الأكثر استخداماً</p>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                الإجراءات والعمليات السريعة
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                الوصول الفوري وأداء المهام الأكثر استخداماً
+              </p>
             </div>
           </div>
         </div>
@@ -568,9 +593,10 @@ export default function DashboardTab({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {kpiCards.map((card) => {
           const isCollectedCard = card.key === 'collectedAmount';
-          const collectionRate = expectedRevenue > 0
-            ? Math.min(100, Math.round((collectedAmount / expectedRevenue) * 100))
-            : 0;
+          const collectionRate =
+            expectedRevenue > 0
+              ? Math.min(100, Math.round((collectedAmount / expectedRevenue) * 100))
+              : 0;
           return (
             <div
               key={card.key}
@@ -591,7 +617,9 @@ export default function DashboardTab({
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <h3 className={`text-2xl font-black ${card.valueColor || 'text-slate-900 dark:text-white'}`}>
+                    <h3
+                      className={`text-2xl font-black ${card.valueColor || 'text-slate-900 dark:text-white'}`}
+                    >
                       {card.value} <span className="text-xs font-normal text-slate-400">{card.unit}</span>
                     </h3>
                     {isCollectedCard && expectedRevenue > 0 && (
@@ -608,7 +636,10 @@ export default function DashboardTab({
                     )}
                   </div>
                   {card.showMonthSelector && (
-                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <select
                         value={selectedRevenueMonth}
                         onChange={(e) => setSelectedRevenueMonth(e.target.value)}
@@ -616,7 +647,9 @@ export default function DashboardTab({
                         className="max-w-[145px] bg-transparent text-[10px] font-bold rounded px-1 py-0.5 text-slate-700 dark:text-slate-200 focus:outline-none cursor-pointer"
                       >
                         {orderedDashboardMonthOptions.map((month) => (
-                          <option key={month.value} value={month.value}>{month.label}</option>
+                          <option key={month.value} value={month.value}>
+                            {month.label}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -659,21 +692,37 @@ export default function DashboardTab({
             {groupSessions.length === 0 ? (
               <div className="text-center py-10">
                 <div className="text-3xl mb-2">📅</div>
-                <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">لم يتم تسجيل حضور اليوم بعد</p>
-                <p className="text-xs text-slate-400">ابدأ بتسجيل الحضور باستخدام كود QR الخاص بالطلاب</p>
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  لم يتم تسجيل حضور اليوم بعد
+                </p>
+                <p className="text-xs text-slate-400">
+                  ابدأ بتسجيل الحضور باستخدام كود QR الخاص بالطلاب
+                </p>
               </div>
             ) : (
               groupSessions.map((session) => {
-                const pct = session.totalCount > 0 ? Math.round((session.attendedCount / session.totalCount) * 100) : 0;
+                const pct =
+                  session.totalCount > 0
+                    ? Math.round((session.attendedCount / session.totalCount) * 100)
+                    : 0;
                 return (
-                  <div key={session.groupName} className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition">
+                  <div
+                    key={session.groupName}
+                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 transition"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h5 className="font-bold text-slate-900 dark:text-white text-xs">{session.groupName}</h5>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">إجمالي الطلاب: {session.totalCount}</p>
+                        <h5 className="font-bold text-slate-900 dark:text-white text-xs">
+                          {session.groupName}
+                        </h5>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          إجمالي الطلاب: {session.totalCount}
+                        </p>
                       </div>
                       <div className="text-left">
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg inline-block ${attendanceBadgeClass(pct)}`}>
+                        <span
+                          className={`text-xs font-bold px-2.5 py-1 rounded-lg inline-block ${attendanceBadgeClass(pct)}`}
+                        >
                           {session.attendedCount} / {session.totalCount} طالب ({pct}%)
                         </span>
                       </div>
@@ -724,7 +773,9 @@ export default function DashboardTab({
             >
               <option value="الكل">كل الصفوف</option>
               {dueGradeOptions.map((gradeName) => (
-                <option key={gradeName} value={gradeName}>{gradeName}</option>
+                <option key={gradeName} value={gradeName}>
+                  {gradeName}
+                </option>
               ))}
             </select>
           </div>
@@ -734,11 +785,17 @@ export default function DashboardTab({
                 const reminderPhone = student.parent_phone || student.phone;
                 const phoneOk = !isPhoneMissing(reminderPhone);
                 return (
-                  <div key={student.id} className="p-3 rounded-xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 flex items-center justify-between">
+                  <div
+                    key={student.id}
+                    className="p-3 rounded-xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 flex items-center justify-between"
+                  >
                     <div>
-                      <h5 className="font-bold text-slate-900 dark:text-slate-100 text-xs">{student.name}</h5>
+                      <h5 className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                        {student.name}
+                      </h5>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        {student.grade_level || 'غير محدد'} | <span className="font-mono">{phoneOk ? reminderPhone : 'بدون رقم'}</span>
+                        {student.grade_level || 'غير محدد'} |{' '}
+                        <span className="font-mono">{phoneOk ? reminderPhone : 'بدون رقم'}</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -746,7 +803,9 @@ export default function DashboardTab({
                         {student.dueAmount} ج.م
                       </span>
                       <span
-                        title={phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'}
+                        title={
+                          phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'
+                        }
                         className="inline-flex"
                       >
                         <button
@@ -775,12 +834,16 @@ export default function DashboardTab({
             ) : studentsWithDue.length > 0 ? (
               <div className="text-center py-8">
                 <div className="text-2xl mb-1">🔍</div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">لا توجد نتائج مطابقة للبحث أو الفلتر الحالي</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                  لا توجد نتائج مطابقة للبحث أو الفلتر الحالي
+                </p>
               </div>
             ) : (
               <div className="text-center py-10">
                 <div className="text-3xl mb-2">🎉</div>
-                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-1">لا توجد متأخرات مالية حالياً</p>
+                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-1">
+                  لا توجد متأخرات مالية حالياً
+                </p>
                 <p className="text-xs text-slate-400">جميع الطلاب قاموا بسداد مستحقاتهم بالكامل</p>
               </div>
             )}
@@ -801,31 +864,47 @@ export default function DashboardTab({
           {recentActivities.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-3xl mb-2">📋</div>
-              <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">لا توجد عمليات حديثة</p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">ستظهر هنا عمليات الحضور والسداد بمجرد إجرائها</p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">
+                لا توجد عمليات حديثة
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                ستظهر هنا عمليات الحضور والسداد بمجرد إجرائها
+              </p>
             </div>
           ) : (
             recentActivities.map((activity) => (
-              <div key={activity.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition">
-                <div className={`p-2 rounded-lg text-base ${
-                  activity.type === 'payment' ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400' :
-                  activity.type === 'attendance' ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400' :
-                  'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
-                }`}>
+              <div
+                key={activity.id}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition"
+              >
+                <div
+                  className={`p-2 rounded-lg text-base ${
+                    activity.type === 'payment'
+                      ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+                      : activity.type === 'attendance'
+                        ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+                        : 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
+                  }`}
+                >
                   {activity.type === 'payment' ? '💰' : activity.type === 'attendance' ? '📈' : '👤'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                    {activity.studentName ? `${activity.studentName} — ` : ''}{activity.description}
+                    {activity.studentName ? `${activity.studentName} — ` : ''}
+                    {activity.description}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                    {activity.amount && <span className="font-semibold text-emerald-600 dark:text-emerald-400">{activity.amount.toLocaleString('en-US')} ج.م</span>}
+                    {activity.amount && (
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                        {activity.amount.toLocaleString('en-US')} ج.م
+                      </span>
+                    )}
                     <span className="text-slate-400 dark:text-slate-500">
                       {new Date(activity.timestamp).toLocaleString('ar-EG-u-nu-latn', {
                         hour: '2-digit',
                         minute: '2-digit',
                         day: '2-digit',
-                        month: '2-digit'
+                        month: '2-digit',
                       })}
                     </span>
                   </p>
@@ -841,8 +920,12 @@ export default function DashboardTab({
 
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
         <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h4 className="font-bold text-slate-900 dark:text-white text-sm">📚 تهيئة المراحل والصفوف والمواد الدراسية</h4>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">إدارة الخيارات والمناهج المتاحة في المركز</p>
+          <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+            📚 تهيئة المراحل والصفوف والمواد الدراسية
+          </h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            إدارة الخيارات والمناهج المتاحة في المركز
+          </p>
         </div>
         {settingsError && (
           <div className="rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 p-3 text-xs font-bold text-rose-600 dark:text-rose-400">
@@ -884,11 +967,24 @@ export default function DashboardTab({
       </div>
 
       {showCollectModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setShowCollectModal(false)}>
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xl" dir="rtl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={() => setShowCollectModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xl"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">💳 تحصيل سريع — ابحث بالاسم أو الهاتف</h3>
-              <button type="button" onClick={() => setShowCollectModal(false)} className="rounded-lg p-1 text-sm font-bold text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                💳 تحصيل سريع — ابحث بالاسم أو الهاتف
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCollectModal(false)}
+                className="rounded-lg p-1 text-sm font-bold text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
                 ✕
               </button>
             </div>
@@ -902,47 +998,65 @@ export default function DashboardTab({
             />
             <div className="mt-3 max-h-[50vh] space-y-2 overflow-y-auto">
               {filteredCollectStudents.length === 0 ? (
-                <p className="py-8 text-center text-xs font-bold text-slate-400">لا توجد متأخرات مسجلة حالياً.</p>
+                <p className="py-8 text-center text-xs font-bold text-slate-400">
+                  لا توجد متأخرات مسجلة حالياً.
+                </p>
               ) : (
                 filteredCollectStudents.map((student) => {
-                    const reminderPhone = student.parent_phone || student.phone;
-                    const phoneOk = !isPhoneMissing(reminderPhone);
-                    return (
-                      <div key={student.id} className="flex items-center justify-between gap-2 rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 p-2.5">
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">{student.name}</div>
-                          <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400" dir="ltr">{phoneOk ? reminderPhone : 'بدون رقم'}</div>
+                  const reminderPhone = student.parent_phone || student.phone;
+                  const phoneOk = !isPhoneMissing(reminderPhone);
+                  return (
+                    <div
+                      key={student.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                          {student.name}
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="rounded-lg bg-rose-100 dark:bg-rose-900/50 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">{student.dueAmount} ج.م</span>
-                          <span title={phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'} className="inline-flex">
-                            <button
-                              type="button"
-                              disabled={!phoneOk}
-                              onClick={() => phoneOk && handleSendWhatsApp(reminderPhone!, student.name, student.dueAmount)}
-                              className={
-                                phoneOk
-                                  ? 'rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700'
-                                  : 'rounded-lg bg-slate-300 dark:bg-slate-700 px-2.5 py-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-70'
-                              }
-                            >
-                              💬
-                            </button>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowCollectModal(false);
-                              onNavigateToTab?.('finance');
-                            }}
-                            className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-indigo-700"
-                          >
-                            تحصيل
-                          </button>
+                        <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400" dir="ltr">
+                          {phoneOk ? reminderPhone : 'بدون رقم'}
                         </div>
                       </div>
-                    );
-                  })
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-lg bg-rose-100 dark:bg-rose-900/50 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                          {student.dueAmount} ج.م
+                        </span>
+                        <span
+                          title={
+                            phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'
+                          }
+                          className="inline-flex"
+                        >
+                          <button
+                            type="button"
+                            disabled={!phoneOk}
+                            onClick={() =>
+                              phoneOk && handleSendWhatsApp(reminderPhone!, student.name, student.dueAmount)
+                            }
+                            className={
+                              phoneOk
+                                ? 'rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700'
+                                : 'rounded-lg bg-slate-300 dark:bg-slate-700 px-2.5 py-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-70'
+                            }
+                          >
+                            💬
+                          </button>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCollectModal(false);
+                            onNavigateToTab?.('finance');
+                          }}
+                          className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-indigo-700"
+                        >
+                          تحصيل
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
