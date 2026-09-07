@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { paymentRecordedMessage, paymentReminderMessage } from '@/lib/whatsapp';
 import WhatsAppButton from './WhatsAppButton';
 import { emitPaymentUpdate } from '@/lib/events';
-import { calculateFinancialSummary, calculateNetAmountDue, calculateRemainingAmount, toFiniteAmount } from '@/lib/calculations';
+import { calculateNetAmountDue, calculateRemainingAmount, toFiniteAmount } from '@/lib/calculations';
 import { useCenterSettings } from '@/hooks/useCenterSettings';
 import {
   STAGES,
@@ -1104,25 +1104,21 @@ export default function FinanceTab() {
     [payments, centerSettings.academicYear]
   );
 
-  const financialSummary = useMemo(
-    () => calculateFinancialSummary(
-      expectedMonthlyIncome,
-      currentAcademicYearPayments.filter(
-        (payment) => cleanMonthOption(payment.month_name) === currentMonth
-      )
-    ),
-    [expectedMonthlyIncome, currentAcademicYearPayments, currentMonth]
-  );
-
   const revenueMonth = filterMonth === 'الكل' ? currentMonth : cleanMonthOption(filterMonth);
+  const selectedMonthExpected = expectedMonthlyIncome;
+
   const selectedMonthCollected = useMemo(
     () => currentAcademicYearPayments
       .filter((payment) => cleanMonthOption(payment.month_name) === revenueMonth)
       .reduce((total, payment) => total + toFiniteAmount(payment.amount_paid), 0),
     [currentAcademicYearPayments, revenueMonth]
   );
-  const remainingToCollect = financialSummary.totalRemaining;
-  const collectionRate = financialSummary.collectionRate;
+  const selectedMonthRemaining = Math.max(0, selectedMonthExpected - selectedMonthCollected);
+  const selectedMonthCollectionRate = selectedMonthExpected > 0
+    ? Math.min(100, Math.round((selectedMonthCollected / selectedMonthExpected) * 100))
+    : 0;
+  const remainingToCollect = selectedMonthRemaining;
+  const collectionRate = selectedMonthCollectionRate;
 
   const paidStudentsCurrentMonth = useMemo(() => {
     const paidStudentsMonth = filterMonth === 'الكل' ? currentMonth : cleanMonthOption(filterMonth);
@@ -1433,7 +1429,7 @@ export default function FinanceTab() {
           <div>
             <p className="text-xs font-bold text-slate-500">إجمالي المستحق</p>
             <h3 className="text-3xl font-black mt-1 text-indigo-600">
-              {formatCurrency(expectedMonthlyIncome)}
+              {formatCurrency(selectedMonthExpected)}
             </h3>
             <p className="text-[11px] font-bold mt-1 text-slate-400">من أسعار وخصومات الطلاب الحاليين</p>
           </div>

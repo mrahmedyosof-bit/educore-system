@@ -59,7 +59,7 @@ export default function ExamsTab() {
   // ═══════════════════════════════════════════════════════════
   // States الرئيسية
   // ═══════════════════════════════════════════════════════════
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [exams, setExams] = useState<Exam[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.exams);
