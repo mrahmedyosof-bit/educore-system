@@ -210,7 +210,7 @@ export default function FinanceTab() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refetch]);
 
   const fetchData = async (): Promise<boolean> => {
     setFetching(true);

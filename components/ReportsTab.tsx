@@ -46,6 +46,19 @@ type FinanceRangeType =
   | 'm01' | 'm02' | 'm03' | 'm04' | 'm05' | 'm06'
   | 'm07' | 'm08' | 'm09' | 'm10' | 'm11' | 'm12';
 
+const getSelectedTargetMonth = (range: FinanceRangeType): string | null => {
+  const now = new Date();
+  if (range === 'month') {
+    return now.toLocaleString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
+  }
+  if (range.startsWith('m')) {
+    const monthIndex = Number.parseInt(range.slice(1), 10) - 1;
+    return new Date(now.getFullYear(), monthIndex, 1)
+      .toLocaleString('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
+  }
+  return null;
+};
+
 export default function ReportsTab() {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -54,6 +67,7 @@ export default function ReportsTab() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [priceMatrix, setPriceMatrix] = useState<Record<string, number>>({});
   const [uniqueCount, setUniqueCount] = useState<number>(0);
+  const selectedTargetMonth = getSelectedTargetMonth(financeRange);
 
   const handleStatsCardClick = (statusType: 'all_students' | 'debtors' | 'paid_fully') => {
     setTableFilter(statusType);
@@ -73,10 +87,10 @@ export default function ReportsTab() {
       return {
         ...student,
         calculatedDue,
-        debtStage: calculatedDue > 0 ? getDebtStage(studentPayments[0]?.month_name ?? null) : null,
+        debtStage: calculatedDue > 0 ? getDebtStage(selectedTargetMonth) : null,
       };
     });
-  }, [students, payments, priceMatrix]);
+  }, [students, payments, priceMatrix, selectedTargetMonth]);
 
   const stats = useMemo(() => {
     const totalPaymentsCollected = payments.reduce(
@@ -172,6 +186,16 @@ export default function ReportsTab() {
     return () => {
       cancelledFlag = true;
     };
+  }, [fetchStudents]);
+
+  useEffect(() => {
+    const handleDataReset = () => {
+      setStudents([]);
+      setPayments([]);
+      void fetchStudents();
+    };
+    window.addEventListener('educore:data-reset', handleDataReset);
+    return () => window.removeEventListener('educore:data-reset', handleDataReset);
   }, [fetchStudents]);
 
   const statCards = [

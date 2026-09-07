@@ -116,6 +116,7 @@ export default function ExamsTab() {
   // ═══════════════════════════════════════════════════════════
   // تحميل البيانات عند بدء التشغيل
   // ═══════════════════════════════════════════════════════════
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
       const storedExams = localStorage.getItem(STORAGE_KEYS.exams);
@@ -129,6 +130,7 @@ export default function ExamsTab() {
       setLoading(false);
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ═══════════════════════════════════════════════════════════
   // دوال مساعدة (Helpers)

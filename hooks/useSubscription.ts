@@ -98,10 +98,11 @@ export function useSubscription(tenantId: string | null | undefined) {
     let mounted = true;
     const isMounted = () => mounted;
 
-    fetchSubscriptionDetails(isMounted);
+    const timer = setTimeout(() => void fetchSubscriptionDetails(isMounted), 0);
 
     return () => {
       mounted = false;
+      clearTimeout(timer);
     };
   }, [fetchSubscriptionDetails]);
 

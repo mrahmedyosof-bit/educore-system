@@ -63,7 +63,8 @@ export function usePayments(): UsePaymentsReturn {
   }, []);
 
   useEffect(() => {
-    refetch();
+    const timer = setTimeout(() => void refetch(), 0);
+    return () => clearTimeout(timer);
   }, [refetch]);
 
   const createPayment = useCallback(async (input: {

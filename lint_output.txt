@@ -1,0 +1,66 @@
+
+C:\Users\mr ahmed\Desktop\educore-system\components\FinanceTab.tsx
+  313:9  warning  The 'fetchData' function makes the dependencies of useEffect Hook (at line 357) change on every render. To fix this, wrap the definition of 'fetchData' in its own useCallback() Hook  react-hooks/exhaustive-deps
+
+C:\Users\mr ahmed\Desktop\educore-system\components\Navigation.tsx
+  428:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\mr ahmed\Desktop\educore-system\components\Navigation.tsx:428:5
+  426 |
+  427 |   useEffect(() => {
+> 428 |     setTempCenterName(centerSettings.centerName);
+      |     ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  429 |     setTempAcademicYear(centerSettings.academicYear);
+  430 |   }, [centerSettings.centerName, centerSettings.academicYear]);
+  431 |  react-hooks/set-state-in-effect
+
+C:\Users\mr ahmed\Desktop\educore-system\components\StudentsTab.tsx
+  327:3  warning  The 'resetForm' function makes the dependencies of useCallback Hook (at line 325) change on every render. To fix this, wrap the definition of 'resetForm' in its own useCallback() Hook  react-hooks/exhaustive-deps
+
+C:\Users\mr ahmed\Desktop\educore-system\components\finance\FinanceTab.tsx
+  213:6  warning  React Hook useEffect has a missing dependency: 'refetch'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\usePayments.ts
+  66:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\usePayments.ts:66:5
+  64 |
+  65 |   useEffect(() => {
+> 66 |     refetch();
+     |     ^^^^^^^ Avoid calling setState() directly within an effect
+  67 |   }, [refetch]);
+  68 |
+  69 |   const createPayment = useCallback(async (input: {  react-hooks/set-state-in-effect
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\useSubscription.ts
+  101:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\mr ahmed\Desktop\educore-system\hooks\useSubscription.ts:101:5
+   99 |     const isMounted = () => mounted;
+  100 |
+> 101 |     fetchSubscriptionDetails(isMounted);
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  102 |
+  103 |     return () => {
+  104 |       mounted = false;  react-hooks/set-state-in-effect
+
+✖ 6 problems (3 errors, 3 warnings)
+

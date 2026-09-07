@@ -144,6 +144,15 @@ export default function StudentsTab() {
   }, []);
 
   useEffect(() => {
+    const handleDataReset = () => {
+      setUniqueStudentsCount(0);
+      void getUniqueStudentsCount().then(setUniqueStudentsCount).catch(console.error);
+    };
+    window.addEventListener('educore:data-reset', handleDataReset);
+    return () => window.removeEventListener('educore:data-reset', handleDataReset);
+  }, []);
+
+  useEffect(() => {
     const loadPayments = async () => {
       try {
         const allPayments = await getPayments();
@@ -296,6 +305,12 @@ export default function StudentsTab() {
     }
   }, [quickPayStudent, quickPayAmount, currentMonth, netDueOf, showToast]);
 
+  const resetForm = useCallback(() => {
+    setFormData(INITIAL_FORM_DATA);
+    setEditingId(null);
+    setExtraOpen(false);
+  }, []);
+
   /* ═══════════════════════════════════════════════════════════
      ✅ دالة تأكيد الحذف (Modal Confirmation Handler)
      تُنفذ الحذف الفعلي بعد تأكيد المستخدم من الـ Modal المخصص
@@ -323,12 +338,6 @@ export default function StudentsTab() {
       setDeleteLoading(false);
     }
   }, [studentToDelete, editingId, deleteStudent, showToast, resetForm]);
-
-  function resetForm() {
-    setFormData(INITIAL_FORM_DATA);
-    setEditingId(null);
-    setExtraOpen(false);
-  }
 
   const clearPersonalFieldsForNextStudent = () => {
     setFormData((prev) => ({

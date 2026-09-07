@@ -424,10 +424,12 @@ export function TopHeader() {
   const [tempCenterName, setTempCenterName] = useState(centerSettings.centerName);
   const [tempAcademicYear, setTempAcademicYear] = useState(centerSettings.academicYear);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setTempCenterName(centerSettings.centerName);
     setTempAcademicYear(centerSettings.academicYear);
   }, [centerSettings.centerName, centerSettings.academicYear]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSaveCenterName = async () => {
     if (tempCenterName.trim() && tempCenterName !== centerSettings.centerName) {

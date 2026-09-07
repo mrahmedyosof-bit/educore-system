@@ -310,7 +310,7 @@ export default function FinanceTab() {
     };
   }, []);
 
-  const fetchData = async (): Promise<boolean> => {
+  const fetchData = useCallback(async (): Promise<boolean> => {
     setFetching(true);
     try {
       const [loadedStudents, loadedUniqueStudents, loadedPayments, prices] = await Promise.all([
@@ -343,7 +343,7 @@ export default function FinanceTab() {
     } finally {
       setFetching(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const handleDataReset = () => {
@@ -730,7 +730,7 @@ export default function FinanceTab() {
     } finally {
       setBulkPaymentLoading(false);
     }
-  }, [bulkPaymentStudents, bulkPaymentMonth, centerSettings.academicYear, getStudentFinalFee, showToast, playSuccessSound]);
+  }, [bulkPaymentStudents, bulkPaymentMonth, centerSettings.academicYear, fetchData, getStudentFinalFee, showToast, playSuccessSound]);
 
   const openBulkPaymentModal = useCallback(() => {
     setShowBulkPaymentModal(true);
@@ -807,7 +807,7 @@ export default function FinanceTab() {
     } finally {
       setLoading(false);
     }
-  }, [showToast, playSuccessSound]);
+  }, [fetchData, showToast, playSuccessSound]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingId(null);
@@ -1008,7 +1008,7 @@ export default function FinanceTab() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [filterMonth, filteredPayments, showToast]);
+  }, [filterMonth, fetchData, filteredPayments, showToast]);
 
   const handleZeroFilteredMonthDebt = useCallback(async () => {
     if (filterMonth === 'الكل') {
@@ -1046,7 +1046,7 @@ export default function FinanceTab() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [filterMonth, filteredPayments, showToast]);
+  }, [filterMonth, fetchData, filteredPayments, showToast]);
 
   const handlePurgeFilteredMonthPayments = useCallback(async () => {
     if (filterMonth === 'الكل') {
@@ -1080,7 +1080,7 @@ export default function FinanceTab() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [filterMonth, filteredPayments, showToast]);
+  }, [filterMonth, fetchData, filteredPayments, showToast]);
 
   const payingStudents = useMemo(() => {
     return uniqueStudents.filter((s) => s.grade && s.subject && !isStudentExempt(s));

@@ -1,17 +1,15 @@
-import next from '@next/eslint-plugin-next';
+const nextConfig = require('eslint-config-next');
 
-export default [
-  {
-    ignores: ['node_modules/', '.next/', 'out/'],
-  },
-  {
-    files: ['**/*.ts', '**/*.tsx'],
-    plugins: {
-      '@next/next': next,
-    },
-    extends: [
-      'plugin:@next/next/recommended',
-      'plugin:@next/next/core-web-vitals',
-    ],
-  },
-];
+module.exports = nextConfig.map(config => {
+  if (config.name === 'next') {
+    return {
+      ...config,
+      rules: {
+        ...(config.rules || {}),
+        '@next/next/no-html-link-for-pages': 'error',
+        '@next/next/no-sync-scripts': 'error',
+      },
+    };
+  }
+  return config;
+});
