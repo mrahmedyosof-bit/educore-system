@@ -60,3 +60,16 @@ export interface StudentFullData extends Student {
   grades?: Grade[];
   payments?: Payment[];
 }
+export interface StudentFullData extends Student {
+  attendance?: Attendance[];
+  grades?: Grade[];
+  payments?: Payment[];
+}
+
+// الكود الجديد في سطر جديد
+export interface DueStudent extends Omit<Student, 'phone' | 'parent_phone'> {
+  dueAmount: number;
+  phone?: string | null;
+  parent_phone?: string | null;
+  exemptedMonths?: string[] | null;
+}
