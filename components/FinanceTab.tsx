@@ -75,7 +75,6 @@ let paymentEventSeq = 0;
 interface PaymentRecord extends ServicePaymentRecord {
   student?: Student;
   month_key?: string;
-  isExempted?: boolean;
 }
 
 const buildPaymentRecord = (
@@ -83,14 +82,11 @@ const buildPaymentRecord = (
   studentsByIdMap: Map<number, Student>
 ): PaymentRecord => {
   const month_key = getMonthKey(payment.month_name);
-  const student = payment.student_id ? studentsByIdMap.get(payment.student_id) : undefined;
-  const isExempted = student && month_key ? isMonthExempted(student, month_key) : false;
   return {
     ...payment,
     month_key,
     month_name: month_key ? getMonthLabel(month_key) : String(payment.month_name ?? ''),
-    student,
-    isExempted,
+    student: payment.student_id ? studentsByIdMap.get(payment.student_id) : undefined,
   };
 };
 
@@ -123,6 +119,7 @@ export default function FinanceTab() {
   } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showExemptedModal, setShowExemptedModal] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -428,7 +425,8 @@ export default function FinanceTab() {
       setQuickPaySubmitting(false);
     }
   };
-    const handleAddPayment = async (e: React.FormEvent<HTMLFormElement>) => {
+
+  const handleAddPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const selectedStudent = selectedStudentId
       ? studentsById.get(Number(selectedStudentId))
@@ -475,9 +473,10 @@ export default function FinanceTab() {
       const paymentInput = {
         student_id: studentId,
         amount_paid: paid,
-        amount_remaining: editingPaymentId === null && selectedDue !== undefined
-          ? calculateRemainingAmount(selectedDue, paid)
-          : remaining,
+        amount_remaining:
+          editingPaymentId === null && selectedDue !== undefined
+            ? calculateRemainingAmount(selectedDue, paid)
+            : remaining,
         month_name: paymentMonthKey,
         academic_year: centerSettings.academicYear,
       };
@@ -500,7 +499,9 @@ export default function FinanceTab() {
       setMessage({ type: 'success', text: successText });
       const refreshed = await fetchData();
       if (!refreshed) {
-        throw new Error(isUpdate ? 'تم تحديث الدفع لكن تعذر تحديث السجلات.' : 'تم تسجيل الدفع لكن تعذر تحديث السجلات.');
+        throw new Error(
+          isUpdate ? 'تم تحديث الدفع لكن تعذر تحديث السجلات.' : 'تم تسجيل الدفع لكن تعذر تحديث السجلات.'
+        );
       }
       showToast({ type: 'success', text: successText });
       playSuccessSound();
@@ -514,8 +515,14 @@ export default function FinanceTab() {
         paymentDate: persistedPayment?.payment_date || persistedPayment?.created_at || getTodayDateISO(),
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      setMessage({ type: 'error', text: editingPaymentId !== null ? `حدث خطأ أثناء تحديث الدفع: ${message}` : `حدث خطأ أثناء تسجيل الدفع: ${message}` });
+      const errorMessage = err instanceof Error ? err.message : 'خطأ غير معروف';
+      setMessage({
+        type: 'error',
+        text:
+          editingPaymentId !== null
+            ? `حدث خطأ أثناء تحديث الدفع: ${errorMessage}`
+            : `حدث خطأ أثناء تسجيل الدفع: ${errorMessage}`,
+      });
     } finally {
       setLoading(false);
     }
@@ -546,13 +553,15 @@ export default function FinanceTab() {
   }, []);
 
   const bulkGroupStudents = useMemo(
-    () => students.filter((student) =>
-      student.stage === bulkPaymentStage &&
-      student.grade === bulkPaymentGrade &&
-      student.group_name === bulkPaymentGroup &&
-      student.subject === bulkPaymentSubject &&
-      getStudentFinalFee(student) > 0
-    ),
+    () =>
+      students.filter(
+        (student) =>
+          student.stage === bulkPaymentStage &&
+          student.grade === bulkPaymentGrade &&
+          student.group_name === bulkPaymentGroup &&
+          student.subject === bulkPaymentSubject &&
+          getStudentFinalFee(student) > 0
+      ),
     [students, bulkPaymentStage, bulkPaymentGrade, bulkPaymentGroup, bulkPaymentSubject, getStudentFinalFee]
   );
 
@@ -561,10 +570,11 @@ export default function FinanceTab() {
     const normalizedMonth = getMonthKey(bulkPaymentMonth);
     const existingPaymentsByStudent = new Map(
       payments
-        .filter((payment) =>
-          (payment.month_key || getMonthKey(payment.month_name)) === normalizedMonth &&
-          payment.student_id != null &&
-          groupStudentIds.has(payment.student_id)
+        .filter(
+          (payment) =>
+            (payment.month_key || getMonthKey(payment.month_name)) === normalizedMonth &&
+            payment.student_id != null &&
+            groupStudentIds.has(payment.student_id)
         )
         .map((payment) => [payment.student_id as number, payment])
     );
@@ -583,14 +593,15 @@ export default function FinanceTab() {
   }, [bulkGroupStudents, bulkPaymentMonth, payments, getStudentFinalFee]);
 
   const bulkPaymentTotals = useMemo(
-    () => bulkPaymentStudents.reduce(
-      (totals, student) => ({
-        paid: totals.paid + student.amountPaid,
-        remaining: totals.remaining + student.amountRemaining,
-        fees: totals.fees + student.defaultPrice,
-      }),
-      { paid: 0, remaining: 0, fees: 0 }
-    ),
+    () =>
+      bulkPaymentStudents.reduce(
+        (totals, student) => ({
+          paid: totals.paid + student.amountPaid,
+          remaining: totals.remaining + student.amountRemaining,
+          fees: totals.fees + student.defaultPrice,
+        }),
+        { paid: 0, remaining: 0, fees: 0 }
+      ),
     [bulkPaymentStudents]
   );
 
@@ -652,32 +663,39 @@ export default function FinanceTab() {
 
   const handleMarkAllAsPaid = useCallback(() => {
     startTransition(() => {
-      setBulkPaymentStudents(prev => prev.map(s => ({
-        ...s,
-        amountPaid: s.defaultPrice,
-        amountRemaining: 0,
-      })));
+      setBulkPaymentStudents(prev =>
+        prev.map(s => ({
+          ...s,
+          amountPaid: s.defaultPrice,
+          amountRemaining: 0,
+        }))
+      );
     });
   }, []);
 
-  const handleBulkPaymentAmountChange = useCallback((studentId: number, field: 'amountPaid' | 'amountRemaining', value: string) => {
-    const numValue = Number(value) || 0;
-    startTransition(() => {
-      setBulkPaymentStudents(prev => prev.map(s => {
-        if (s.student.id === studentId) {
-          const newAmountPaid = field === 'amountPaid' ? numValue : s.amountPaid;
-          const newAmountRemaining = field === 'amountRemaining' ? numValue : Math.max(0, s.defaultPrice - newAmountPaid);
-          const finalRemaining = field === 'amountPaid' ? Math.max(0, s.defaultPrice - newAmountPaid) : newAmountRemaining;
-          return {
-            ...s,
-            amountPaid: newAmountPaid,
-            amountRemaining: finalRemaining,
-          };
-        }
-        return s;
-      }));
-    });
-  }, []);
+  const handleBulkPaymentAmountChange = useCallback(
+    (studentId: number, field: 'amountPaid' | 'amountRemaining', value: string) => {
+      const numValue = Number(value) || 0;
+      startTransition(() => {
+        setBulkPaymentStudents(prev =>
+          prev.map(s => {
+            if (s.student.id === studentId) {
+              const newAmountPaid = field === 'amountPaid' ? numValue : s.amountPaid;
+              const newAmountRemaining = field === 'amountRemaining' ? numValue : Math.max(0, s.defaultPrice - newAmountPaid);
+              const finalRemaining = field === 'amountPaid' ? Math.max(0, s.defaultPrice - newAmountPaid) : newAmountRemaining;
+              return {
+                ...s,
+                amountPaid: newAmountPaid,
+                amountRemaining: finalRemaining,
+              };
+            }
+            return s;
+          })
+        );
+      });
+    },
+    []
+  );
 
   const handleSaveBulkPayment = useCallback(async () => {
     if (bulkPaymentStudents.length === 0) return;
@@ -727,8 +745,8 @@ export default function FinanceTab() {
         setBulkPaymentStudents([]);
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      setMessage({ type: 'error', text: `حدث خطأ أثناء حفظ التحصيل الجماعي: ${message}` });
+      const errorMessage = err instanceof Error ? err.message : 'خطأ غير معروف';
+      setMessage({ type: 'error', text: `حدث خطأ أثناء حفظ التحصيل الجماعي: ${errorMessage}` });
     } finally {
       setBulkPaymentLoading(false);
     }
@@ -780,36 +798,76 @@ export default function FinanceTab() {
     });
   }, []);
 
-  const handleMonthlyExempt = useCallback(async (payment: PaymentRecord) => {
-    if (!payment.student || !payment.id) return;
-    const confirmMessage = `هل تريد إعفاء الطالب ${payment.student.name} من مصاريف شهر ${payment.month_name} فقط؟`;
-    if (!window.confirm(confirmMessage)) return;
-    setLoading(true);
-    setMessage(null);
-    try {
-      await updatePayment(payment.id, {
-        student_id: payment.student_id ?? 0,
-        amount_paid: Number(payment.amount_paid || 0),
-        amount_remaining: 0,
-        month_name: payment.month_name,
-      });
-      emitPaymentUpdate({
-        type: 'payment-updated',
-        studentId: payment.student_id ?? undefined,
-        timestamp: ++paymentEventSeq,
-      });
-      await fetchData();
-      const exemptSuccessText = `تم إعفاء الطالب ${payment.student?.name} من مصاريف شهر ${payment.month_name} بنجاح.`;
-      setMessage({ type: 'success', text: exemptSuccessText });
-      showToast({ type: 'success', text: exemptSuccessText });
-      playSuccessSound();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      setMessage({ type: 'error', text: `حدث خطأ أثناء إعفاء الشهر: ${message}` });
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchData, showToast, playSuccessSound]);
+  // ==================== إعفاء طالب من شهر معين (إعفاء دائم مسجل في ملف الطالب) ====================
+  const handleExemptStudentMonth = useCallback(
+    async (student: Student, monthKey: string) => {
+      if (!monthKey) {
+        showToast({ type: 'error', text: 'يرجى اختيار شهر صالح أولاً.' });
+        return;
+      }
+      if (!window.confirm(`هل تريد إعفاء الطالب ${student.name} من مصاريف شهر ${getMonthLabel(monthKey)} فقط؟`)) return;
+      setLoading(true);
+      setMessage(null);
+      try {
+        await addExemptedMonth(student.id, monthKey);
+        emitPaymentUpdate({
+          type: 'payment-updated',
+          studentId: student.id,
+          timestamp: ++paymentEventSeq,
+        });
+        await fetchData();
+        const exemptSuccessText = `تم إعفاء الطالب ${student.name} من مصاريف شهر ${getMonthLabel(monthKey)} بنجاح.`;
+        setMessage({ type: 'success', text: exemptSuccessText });
+        showToast({ type: 'success', text: exemptSuccessText });
+        playSuccessSound();
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'خطأ غير معروف';
+        setMessage({ type: 'error', text: `حدث خطأ أثناء إعفاء الشهر: ${errorMessage}` });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchData, showToast, playSuccessSound]
+  );
+
+  const handleMonthlyExempt = useCallback(
+    async (payment: PaymentRecord) => {
+      if (!payment.student) return;
+      const monthKey = payment.month_key || getMonthKey(payment.month_name);
+      await handleExemptStudentMonth(payment.student, monthKey);
+    },
+    [handleExemptStudentMonth]
+  );
+
+  const handleRemoveMonthlyExempt = useCallback(
+    async (student: Student, monthKey: string) => {
+      if (!monthKey) {
+        showToast({ type: 'error', text: 'شهر غير صالح.' });
+        return;
+      }
+      if (!window.confirm(`هل تريد إلغاء إعفاء الطالب ${student.name} لشهر ${getMonthLabel(monthKey)}؟ ستعود القيمة إلى الدخل المتوقع.`)) return;
+      setLoading(true);
+      setMessage(null);
+      try {
+        await removeExemptedMonth(student.id, monthKey);
+        emitPaymentUpdate({
+          type: 'payment-updated',
+          studentId: student.id,
+          timestamp: ++paymentEventSeq,
+        });
+        await fetchData();
+        const text = `تم إلغاء إعفاء الطالب ${student.name} لشهر ${getMonthLabel(monthKey)}.`;
+        setMessage({ type: 'success', text });
+        showToast({ type: 'success', text });
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'خطأ غير معروف';
+        setMessage({ type: 'error', text: `حدث خطأ أثناء إلغاء الإعفاء: ${errorMessage}` });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchData, showToast]
+  );
 
   const handleCancelEdit = useCallback(() => {
     setEditingId(null);
@@ -817,34 +875,37 @@ export default function FinanceTab() {
     setFormData(INITIAL_FORM_DATA);
   }, []);
 
-  const handleSubmitForm = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!formData.name.trim() || !formData.grade || !formData.subject || !formData.group) {
-      setMessage({ type: 'error', text: 'يرجى ملء جميع الحقول المطلوبة.' });
-      return;
-    }
-    setLoading(true);
-    setMessage(null);
-    try {
-      if (editingId !== null) {
-        setMessage({
-          type: 'error',
-          text: '⚠️ تعديل بيانات الطالب غير متاح من هنا. يرجى استخدام تبويب "إدارة الطلاب" لتعديل البيانات.'
-        });
-      } else {
-        setMessage({
-          type: 'error',
-          text: '⚠️ إضافة طالب جديد غير متاح من هنا. يرجى استخدام تبويب "إدارة الطلاب" لإضافة طالب.'
-        });
+  const handleSubmitForm = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!formData.name.trim() || !formData.grade || !formData.subject || !formData.group) {
+        setMessage({ type: 'error', text: 'يرجى ملء جميع الحقول المطلوبة.' });
+        return;
       }
-      handleCancelEdit();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      setMessage({ type: 'error', text: `حدث خطأ: ${message}` });
-    } finally {
-      setLoading(false);
-    }
-  }, [editingId, handleCancelEdit, formData.name, formData.grade, formData.subject, formData.group]);
+      setLoading(true);
+      setMessage(null);
+      try {
+        if (editingId !== null) {
+          setMessage({
+            type: 'error',
+            text: '⚠️ تعديل بيانات الطالب غير متاح من هنا. يرجى استخدام تبويب "إدارة الطلاب" لتعديل البيانات.',
+          });
+        } else {
+          setMessage({
+            type: 'error',
+            text: '⚠️ إضافة طالب جديد غير متاح من هنا. يرجى استخدام تبويب "إدارة الطلاب" لإضافة طالب.',
+          });
+        }
+        handleCancelEdit();
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'خطأ غير معروف';
+        setMessage({ type: 'error', text: `حدث خطأ: ${errorMessage}` });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [editingId, handleCancelEdit, formData.name, formData.grade, formData.subject, formData.group]
+  );
 
   const monthOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -888,11 +949,13 @@ export default function FinanceTab() {
     };
   }, []);
 
+  const revenueMonthKey = filterMonth === 'الكل' ? currentMonthKey : getMonthKey(filterMonth);
+  const revenueMonthLabel = revenueMonthKey ? getMonthLabel(revenueMonthKey) : 'الكل';
+
   const currentAcademicYearPayments = useMemo(
     () =>
       payments.filter(
-        (payment) =>
-          !payment.academic_year || payment.academic_year === centerSettings.academicYear
+        (payment) => !payment.academic_year || payment.academic_year === centerSettings.academicYear
       ),
     [payments, centerSettings.academicYear]
   );
@@ -900,19 +963,21 @@ export default function FinanceTab() {
   const paymentsWithStatus = useMemo(() => {
     return currentAcademicYearPayments.map(payment => {
       const paymentMonthKey = payment.month_key || getMonthKey(payment.month_name);
-      const remaining = payment.student
-        ? calculateRemainingAmount(
-            getStudentNetAmountDue(payment.student),
-            payment.amount_paid
-          )
-        : Number(payment.amount_remaining ?? 0);
-      const { isCurrent, isPast, isFuture } = getMonthStatus(
-        paymentMonthKey,
-        currentMonthKey
-      );
+      const studentExemptedForMonth = payment.student
+        ? isMonthExempted(payment.student, paymentMonthKey)
+        : false;
+      const remaining = studentExemptedForMonth
+        ? 0
+        : payment.student
+          ? calculateRemainingAmount(getStudentNetAmountDue(payment.student), payment.amount_paid)
+          : Number(payment.amount_remaining ?? 0);
+      const { isCurrent, isPast, isFuture } = getMonthStatus(paymentMonthKey, currentMonthKey);
       let statusType: 'paid' | 'overdue' | 'due' | 'future' = 'due';
       let statusText = '';
-      if (remaining <= 0) {
+      if (studentExemptedForMonth) {
+        statusType = 'paid';
+        statusText = 'معفى من هذا الشهر 🎁';
+      } else if (remaining <= 0) {
         statusType = 'paid';
         statusText = 'مسدد ✓';
       } else if (isPast) {
@@ -942,14 +1007,13 @@ export default function FinanceTab() {
   }, [currentAcademicYearPayments, currentMonthKey, currentDateInfo.day, getStudentNetAmountDue]);
 
   const filteredPayments = useMemo(
-    () => paymentsWithStatus.filter((p) => {
-      const monthMatch =
-        filterMonth === 'الكل' ||
-        (p.month_key || getMonthKey(p.month_name)) === filterMonth;
-      const gradeMatch = filterGrade === 'الكل' || p.student?.grade === filterGrade;
-      const subjectMatch = filterSubject === 'كل المواد' || p.student?.subject === filterSubject;
-      return monthMatch && gradeMatch && subjectMatch;
-    }),
+    () =>
+      paymentsWithStatus.filter((p) => {
+        const monthMatch = filterMonth === 'الكل' || (p.month_key || getMonthKey(p.month_name)) === filterMonth;
+        const gradeMatch = filterGrade === 'الكل' || p.student?.grade === filterGrade;
+        const subjectMatch = filterSubject === 'كل المواد' || p.student?.subject === filterSubject;
+        return monthMatch && gradeMatch && subjectMatch;
+      }),
     [paymentsWithStatus, filterMonth, filterGrade, filterSubject]
   );
 
@@ -985,10 +1049,7 @@ export default function FinanceTab() {
       await fetchData();
     } catch (err: unknown) {
       console.error('Reset Payments Error Detail:', err);
-      const errorRecord = err as {
-        message?: unknown;
-        error_description?: unknown;
-      } | null;
+      const errorRecord = err as { message?: unknown; error_description?: unknown } | null;
       const errorMessage =
         errorRecord?.message ||
         errorRecord?.error_description ||
@@ -1073,25 +1134,39 @@ export default function FinanceTab() {
     return uniqueStudents.filter((s) => s.grade && s.subject && !isStudentExempt(s));
   }, [uniqueStudents]);
 
-  const expectedMonthlyIncome = useMemo(() => {
+  // ==================== الطلاب المعفيين من الشهر الحالي (كارت الإعفاءات) ====================
+  const exemptedStudentsThisMonth = useMemo(() => {
+    return payingStudents.filter((s) => isMonthExempted(s, revenueMonthKey));
+  }, [payingStudents, revenueMonthKey]);
+
+  const exemptedMonthlyAmount = useMemo(() => {
     let total = 0;
-    payingStudents.forEach((student) => {
+    exemptedStudentsThisMonth.forEach((student) => {
       const price = priceMatrix[priceKey(student.grade!, student.subject!)];
       if (typeof price === 'number' && Number.isFinite(price)) {
         total += Math.max(0, price - getStudentDiscount(student));
       }
     });
     return total;
-  }, [payingStudents, priceMatrix]);
+  }, [exemptedStudentsThisMonth, priceMatrix]);
 
-  const revenueMonthKey = filterMonth === 'الكل' ? currentMonthKey : getMonthKey(filterMonth);
-  const revenueMonthLabel = revenueMonthKey ? getMonthLabel(revenueMonthKey) : 'الكل';
+  // ==================== الدخل المتوقع بعد خصم الإعفاءات ====================
+  const expectedMonthlyIncome = useMemo(() => {
+    let total = 0;
+    payingStudents.forEach((student) => {
+      if (isMonthExempted(student, revenueMonthKey)) return;
+      const price = priceMatrix[priceKey(student.grade!, student.subject!)];
+      if (typeof price === 'number' && Number.isFinite(price)) {
+        total += Math.max(0, price - getStudentDiscount(student));
+      }
+    });
+    return total;
+  }, [payingStudents, priceMatrix, revenueMonthKey]);
 
   const monthPayments = useMemo(
     () =>
       currentAcademicYearPayments.filter(
-        (payment) =>
-          (payment.month_key || getMonthKey(payment.month_name)) === revenueMonthKey
+        (payment) => (payment.month_key || getMonthKey(payment.month_name)) === revenueMonthKey
       ),
     [currentAcademicYearPayments, revenueMonthKey]
   );
@@ -1116,9 +1191,10 @@ export default function FinanceTab() {
 
   const remainingToCollect = selectedMonthRemaining;
 
-  const collectionRate = selectedMonthExpected > 0
-    ? Math.min(100, Math.round((selectedMonthCollected / selectedMonthExpected) * 100))
-    : 0;
+  const collectionRate =
+    selectedMonthExpected > 0
+      ? Math.min(100, Math.round((selectedMonthCollected / selectedMonthExpected) * 100))
+      : 0;
 
   const paidStudentsMonthKey = filterMonth === 'الكل' ? currentMonthKey : getMonthKey(filterMonth);
   const paidStudentsModalMonth = getMonthLabel(paidStudentsMonthKey);
@@ -1140,18 +1216,13 @@ export default function FinanceTab() {
           ? new Date(p.created_at).toLocaleDateString('ar-EG-u-nu-latn')
           : '-',
       }))
-      .sort(
-        (a, b) =>
-          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-      );
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [currentAcademicYearPayments, paidStudentsMonthKey]);
 
   const filteredPaidStudents = useMemo(() => {
     if (!deferredPaidStudentsSearch.trim()) return paidStudentsCurrentMonth;
     const query = deferredPaidStudentsSearch.trim().toLowerCase();
-    return paidStudentsCurrentMonth.filter((p) =>
-      p.studentName.toLowerCase().includes(query)
-    );
+    return paidStudentsCurrentMonth.filter((p) => p.studentName.toLowerCase().includes(query));
   }, [paidStudentsCurrentMonth, deferredPaidStudentsSearch]);
 
   const todayPayments = useMemo(() => {
@@ -1164,7 +1235,9 @@ export default function FinanceTab() {
         subject: p.student?.subject || '-',
         targetMonth: getMonthLabel(p.month_key || getMonthKey(p.month_name)) || '-',
         paidAmount: Number(p.amount_paid || 0),
-        paymentTime: p.created_at ? new Date(p.created_at).toLocaleTimeString('ar-EG-u-nu-latn', { hour: '2-digit', minute: '2-digit' }) : '-',
+        paymentTime: p.created_at
+          ? new Date(p.created_at).toLocaleTimeString('ar-EG-u-nu-latn', { hour: '2-digit', minute: '2-digit' })
+          : '-',
       }))
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [currentAcademicYearPayments, todayDate]);
@@ -1178,9 +1251,7 @@ export default function FinanceTab() {
   const filteredTodayPayments = useMemo(() => {
     if (!deferredTodayPaymentsSearch.trim()) return todayPayments;
     const query = deferredTodayPaymentsSearch.trim().toLowerCase();
-    return todayPayments.filter((p) =>
-      p.studentName.toLowerCase().includes(query)
-    );
+    return todayPayments.filter((p) => p.studentName.toLowerCase().includes(query));
   }, [todayPayments, deferredTodayPaymentsSearch]);
 
   const stages = useMemo(() => {
@@ -1276,6 +1347,7 @@ export default function FinanceTab() {
     if (!lateOnly) return matchingStudents;
     const targetMonthKey = getMonthKey(monthName || currentMonthKey);
     return matchingStudents.filter((student) => {
+      if (isMonthExempted(student, targetMonthKey)) return false;
       const netAmountDue = getStudentNetAmountDue(student);
       const payment = currentAcademicYearPayments.find(
         (candidate) =>
@@ -1424,18 +1496,43 @@ export default function FinanceTab() {
         </div>
       )}
 
-      {/* ==================== KPI Cards ==================== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* ==================== KPI Cards (6 كروت مع كارت الإعفاءات) ==================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex justify-between items-center transition-all hover:shadow-md hover:scale-[1.01]">
           <div>
             <p className="text-xs font-bold text-slate-500">إجمالي المستحق</p>
             <h3 className="text-3xl font-black mt-1 text-indigo-600">
               {formatCurrency(selectedMonthExpected)}
             </h3>
-            <p className="text-[11px] font-bold mt-1 text-slate-400">من أسعار وخصومات الطلاب الحاليين</p>
+            <p className="text-[11px] font-bold mt-1 text-slate-400">
+              {exemptedStudentsThisMonth.length > 0
+                ? `بعد خصم ${exemptedStudentsThisMonth.length} إعفاء هذا الشهر`
+                : 'من أسعار وخصومات الطلاب الحاليين'}
+            </p>
           </div>
           <div className="text-3xl bg-indigo-50 p-3 rounded-2xl text-indigo-600">🎯</div>
         </div>
+
+        <div
+          onClick={() => setShowExemptedModal(true)}
+          className="bg-white p-5 rounded-3xl border border-purple-200/80 shadow-sm flex justify-between items-center transition-all hover:shadow-md hover:scale-[1.01] cursor-pointer"
+          title="اضغط لعرض تفاصيل الإعفاءات"
+        >
+          <div>
+            <div className="flex items-center gap-1 mb-1">
+              <p className="text-xs font-bold text-slate-500">إعفاءات شهر {revenueMonthLabel}</p>
+              <span className="text-[10px] font-bold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-md">
+                {exemptedStudentsThisMonth.length} طالب
+              </span>
+            </div>
+            <h3 className="text-3xl font-black mt-1 text-purple-600">
+              {formatCurrency(exemptedMonthlyAmount)}
+            </h3>
+            <p className="text-[11px] font-bold mt-1 text-purple-400">مخصومة من إجمالي المستحق ↗</p>
+          </div>
+          <div className="text-3xl bg-purple-50 p-3 rounded-2xl text-purple-600">🎁</div>
+        </div>
+
         <div
           onClick={() => setShowPaidStudentsModal(true)}
           className="bg-white p-5 rounded-3xl border border-emerald-200/80 shadow-sm flex justify-between items-center transition-all hover:shadow-md hover:scale-[1.01] cursor-pointer"
@@ -1453,6 +1550,7 @@ export default function FinanceTab() {
           </div>
           <div className="text-3xl bg-emerald-50 p-3 rounded-2xl text-emerald-600">💵</div>
         </div>
+
         <div
           onClick={() => setShowTodayPaymentsModal(true)}
           className="bg-white p-5 rounded-3xl border border-amber-200/80 shadow-sm flex justify-between items-center transition-all hover:shadow-md hover:scale-[1.01] cursor-pointer"
@@ -1474,6 +1572,7 @@ export default function FinanceTab() {
           </div>
           <div className="text-3xl bg-amber-50 p-3 rounded-2xl text-amber-600">📅</div>
         </div>
+
         <div className="bg-white p-5 rounded-3xl border border-rose-200/80 shadow-sm flex justify-between items-center transition-all hover:shadow-md hover:scale-[1.01]">
           <div>
             <p className="text-xs font-bold text-slate-500">إجمالي المتبقي</p>
@@ -1486,6 +1585,7 @@ export default function FinanceTab() {
           </div>
           <div className="text-3xl bg-rose-50 p-3 rounded-2xl text-rose-600">⏳</div>
         </div>
+
         <div className="bg-white p-5 rounded-3xl border border-blue-200/80 shadow-sm flex justify-between items-center transition-all hover:shadow-md hover:scale-[1.01]">
           <div>
             <p className="text-xs font-bold text-slate-500">نسبة التحصيل</p>
@@ -1493,7 +1593,7 @@ export default function FinanceTab() {
               {collectionRate}%
             </h3>
             <p className="text-[11px] font-bold mt-1 text-blue-400">
-              من إجمالي {payingStudents.length} طالب مستهدف
+              من إجمالي {payingStudents.length - exemptedStudentsThisMonth.length} طالب مستهدف
             </p>
           </div>
           <div className="text-3xl bg-blue-50 p-3 rounded-2xl text-blue-600">📊</div>
@@ -1931,6 +2031,7 @@ export default function FinanceTab() {
                   const studentExempt = isStudentExempt(student);
                   const studentDue = getStudentNetAmountDue(student);
                   const targetMonthKey = getMonthKey(monthName || currentMonthKey);
+                  const studentMonthExempted = isMonthExempted(student, targetMonthKey);
                   const existingPayment = currentAcademicYearPayments.find(p =>
                     p.student_id === student.id &&
                     (p.month_key || getMonthKey(p.month_name)) === targetMonthKey
@@ -1962,7 +2063,11 @@ export default function FinanceTab() {
                             معفى من المصاريف
                           </span>
                         ) : monthName.trim() ? (
-                          isPaid ? (
+                          studentMonthExempted ? (
+                            <span className="rounded-lg bg-purple-50 px-2.5 py-1 font-black text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+                              معفى من هذا الشهر 🎁
+                            </span>
+                          ) : isPaid ? (
                             <span className="rounded-lg bg-emerald-50 px-2.5 py-1 font-black text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                               مسدد ✓ ({formatCurrency(paidAmount)})
                             </span>
@@ -1983,6 +2088,15 @@ export default function FinanceTab() {
                         <div className="flex items-center gap-1.5">
                           {!monthName.trim() ? (
                             <span className="text-slate-400 text-[10px]">حدد الشهر أولاً</span>
+                          ) : studentMonthExempted ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMonthlyExempt(student, targetMonthKey)}
+                              className="rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 text-[10px] font-bold transition"
+                              title="إلغاء إعفاء هذا الشهر وإعادته للدخل المتوقع"
+                            >
+                              ↩️ إلغاء الإعفاء
+                            </button>
                           ) : isPaid ? (
                             <>
                               <button
@@ -1996,20 +2110,30 @@ export default function FinanceTab() {
                               <button
                                 type="button"
                                 onClick={() => handleMonthlyExempt(existingPayment!)}
-                                className="rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 px-2 py-1 text-[10px] font-bold transition"
-                                title="إعفاء هذا الشهر"
+                                className="rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 text-[10px] font-bold transition"
+                                title="إعفاء من هذا الشهر"
                               >
                                 🎁 إعفاء
                               </button>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => openQuickPay(student, studentDue)}
-                              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs transition shadow-sm"
-                            >
-                              ⚡ تسديد سريع
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openQuickPay(student, studentDue)}
+                                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs transition shadow-sm"
+                              >
+                                ⚡ تسديد سريع
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleExemptStudentMonth(student, targetMonthKey)}
+                                className="rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 text-[10px] font-bold transition"
+                                title="إعفاء من هذا الشهر (التحق متأخراً)"
+                              >
+                                🎁 إعفاء
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -2218,8 +2342,8 @@ export default function FinanceTab() {
                                   <button
                                     type="button"
                                     onClick={() => handleMonthlyExempt(payment)}
-                                    className="px-2 py-1 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 rounded transition-colors"
-                                    title="إعفاء الشهر الحالي فقط"
+                                    className="px-2 py-1 text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 rounded transition-colors"
+                                    title="إعفاء من شهر هذه الدفعة"
                                   >
                                     🎁 إعفاء الشهر
                                   </button>
@@ -3069,6 +3193,82 @@ export default function FinanceTab() {
           </div>
         </div>
       ) : null}
+
+      {/* ==================== مودال تفاصيل الإعفاءات ==================== */}
+      {showExemptedModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={() => setShowExemptedModal(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-3xl border border-purple-200 bg-white p-6 shadow-2xl max-h-[80vh] flex flex-col"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-800">🎁 إعفاءات شهر {revenueMonthLabel}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {exemptedStudentsThisMonth.length} طالب معفى — إجمالي {formatCurrency(exemptedMonthlyAmount)} ج.م مخصومة من الدخل المتوقع
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExemptedModal(false)}
+                className="rounded-lg px-2 py-1 text-sm font-black text-slate-400 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto space-y-2">
+              {exemptedStudentsThisMonth.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="text-3xl mb-2">🎁</div>
+                  <p className="text-sm font-bold text-slate-600">
+                    لا توجد إعفاءات مسجلة لشهر {revenueMonthLabel}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    استخدم زر "🎁 إعفاء" من جدول التحصيل السريع أو سجل العمليات لإضافة إعفاء جديد
+                  </p>
+                </div>
+              ) : (
+                exemptedStudentsThisMonth.map((student) => {
+                  const price = priceMatrix[priceKey(student.grade!, student.subject!)];
+                  const netFee = typeof price === 'number' && Number.isFinite(price)
+                    ? Math.max(0, price - getStudentDiscount(student))
+                    : 0;
+                  return (
+                    <div
+                      key={student.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-purple-100 bg-purple-50/40 p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-bold text-slate-900">{student.name}</div>
+                        <div className="text-[10px] text-slate-500">
+                          {student.grade || '-'} — {student.subject || '-'}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-lg bg-purple-100 px-2 py-1 text-[11px] font-bold text-purple-700">
+                          {formatCurrency(netFee)} ج.م
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMonthlyExempt(student, revenueMonthKey)}
+                          className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-200"
+                          title="إلغاء الإعفاء وإعادته للدخل المتوقع"
+                        >
+                          ↩️ إلغاء الإعفاء
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

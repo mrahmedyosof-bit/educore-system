@@ -1,10 +1,17 @@
 ﻿'use client';
+
 import React, { useState, useEffect, useCallback, useDeferredValue, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCurriculumSettings } from '@/hooks/useCurriculumSettings';
 import { useCenterSettings } from '@/hooks/useCenterSettings';
 import { openWhatsApp } from '@/lib/whatsapp';
-import { getUniqueStudentsCount, getStudents, addExemptedMonth, isMonthExempted } from '@/lib/services/students';
+import {
+  getUniqueStudentsCount,
+  getStudents,
+  addExemptedMonth,
+  removeExemptedMonth,
+  isMonthExempted,
+} from '@/lib/services/students';
 import { getPriceMatrix, priceKey } from '@/lib/services/settings';
 import { calculateNetAmountDue, calculateRemainingAmount } from '@/lib/calculations';
 import {
@@ -103,7 +110,7 @@ const formatDashboardMonth = (value: string): string => {
       .normalize('NFKC')
       .replace(/[٠-٩۰-۹]/g, (digit) => {
         const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-        const easternDigits = '۰۱۲۳۴۵۶۷۸۹';
+        const easternDigits = '۰۱۲۳۴۵۶۷۸';
         const arabicIndex = arabicDigits.indexOf(digit);
         const easternIndex = easternDigits.indexOf(digit);
         return String(arabicIndex >= 0 ? arabicIndex : easternIndex);
@@ -187,6 +194,13 @@ export default function DashboardTab({
   const [dueSearchQuery, setDueSearchQuery] = useState('');
   const [dueSelectedGrade, setDueSelectedGrade] = useState('الكل');
 
+  // ==================== حالات الإعفاءات الجديدة ====================
+  const [exemptedAmount, setExemptedAmount] = useState<number>(0);
+  const [exemptedCount, setExemptedCount] = useState<number>(0);
+  const [exemptedStudents, setExemptedStudents] = useState<DueStudent[]>([]);
+  const [showExemptedModal, setShowExemptedModal] = useState(false);
+  const [waivingStudentId, setWaivingStudentId] = useState<number | null>(null);
+
   const deferredDueSearchQuery = useDeferredValue(dueSearchQuery);
   const deferredCollectQuery = useDeferredValue(collectQuery);
 
@@ -250,10 +264,45 @@ export default function DashboardTab({
         const allStudentsData = await getStudents();
         const priceMatrix = await getPriceMatrix();
 
+        // ==================== حساب الإعفاءات + الدخل المتوقع بعد الخصم ====================
+        let expectedTotal = 0;
+        let exemptedTotal = 0;
+        let exemptedCounter = 0;
+        const exemptedList: DueStudent[] = [];
+
+        allStudentsData.forEach((student) => {
+          if (student.grade && student.subject && !student.isExempt) {
+            const price = priceMatrix[priceKey(student.grade, student.subject)];
+            if (typeof price === 'number' && Number.isFinite(price)) {
+              const discount = student.discountAmount || 0;
+              const netFee = calculateNetAmountDue(price, discount);
+
+              if (isMonthExempted(student, selectedRevenueMonth)) {
+                // طالب معفى من الشهر الحالي: قيمته تروح لكارت الإعفاءات ومش تدخل الدخل المتوقع
+                exemptedTotal += netFee;
+                exemptedCounter += 1;
+                exemptedList.push({ ...student, dueAmount: netFee });
+              } else {
+                // طالب غير معفى: يدخل في الدخل الشهري المتوقع
+                expectedTotal += netFee;
+              }
+            }
+          }
+        });
+
+        if (!cancelled()) {
+          setExpectedRevenue(expectedTotal);
+          setExemptedAmount(exemptedTotal);
+          setExemptedCount(exemptedCounter);
+          setExemptedStudents(exemptedList);
+        }
+
+        // الطلاب المؤهلين للمديونية: نستثني المعفيين من الشهر الحالي
         const eligibleStudentIds = new Set(
           allStudentsData
             .filter((student) => {
               if (student.isExempt || !student.grade || !student.subject) return false;
+              if (isMonthExempted(student, selectedRevenueMonth)) return false;
               const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
               const discount = Number(student.discountAmount ?? 0);
               const finalFee = calculateNetAmountDue(price, discount);
@@ -261,19 +310,6 @@ export default function DashboardTab({
             })
             .map((student) => student.id)
         );
-
-        let expectedTotal = 0;
-        allStudentsData.forEach((student) => {
-          if (student.grade && student.subject && !student.isExempt) {
-            const price = priceMatrix[priceKey(student.grade, student.subject)];
-            if (typeof price === 'number' && Number.isFinite(price)) {
-              const discount = student.discountAmount || 0;
-              expectedTotal += calculateNetAmountDue(price, discount);
-            }
-          }
-        });
-
-        if (!cancelled()) setExpectedRevenue(expectedTotal);
 
         const paymentsQuery = supabase
           .from('payments')
@@ -303,8 +339,7 @@ export default function DashboardTab({
           if (!student) return;
           const price = priceMatrix[priceKey(student.grade || '', student.subject || '')];
           const netAmountDue = calculateNetAmountDue(price, student.discountAmount);
-          const isExempted = isMonthExempted(student, selectedRevenueMonth);
-          const remaining = isExempted ? 0 : calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
+          const remaining = calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
           if (remaining > 0) remainingByStudent.set(studentId, remaining);
         });
 
@@ -442,19 +477,50 @@ export default function DashboardTab({
     [centerSettings.centerName]
   );
 
+  // ==================== إعفاء طالب من الشهر الحالي ====================
   const handleWaiveMonth = useCallback(
     async (studentId: number, studentName: string, monthKey: string) => {
-      const confirmMessage = `هل تريد إعفاء الطالب "${studentName}" من مصاريف شهر ${getMonthLabel(monthKey)}؟\n\nسيتم تصفير المبلغ المتبقي وإضافة الشهر لقائمة الإعفاءات.`;
+      const confirmMessage =
+        `هل تريد إعفاء الطالب "${studentName}" من مصاريف شهر ${getMonthLabel(monthKey)}؟\n` +
+        `سيتم خصم قيمة اشتراكه من الدخل الشهري المتوقع ونقله إلى كارت الإعفاءات.`;
       if (!window.confirm(confirmMessage)) return;
 
+      setWaivingStudentId(studentId);
       try {
         await addExemptedMonth(studentId, monthKey);
-        setStudentsWithDue(prev => prev.filter(s => s.id !== studentId));
+        setStudentsWithDue((prev) => prev.filter((s) => s.id !== studentId));
         await fetchDashboardMetrics(() => false);
-        alert(`✅ تم إعفاء الطالب "${studentName}" من شهر ${getMonthLabel(monthKey)} بنجاح.`);
+        alert(`✅ تم إعفاء "${studentName}" من شهر ${getMonthLabel(monthKey)} وخصم القيمة من الدخل المتوقع.`);
       } catch (err) {
         console.error('Waive Month Error:', err);
         alert('حدث خطأ أثناء عملية الإعفاء. يرجى المحاولة مرة أخرى.');
+      } finally {
+        setWaivingStudentId(null);
+      }
+    },
+    [fetchDashboardMetrics]
+  );
+
+  // ==================== إلغاء إعفاء طالب ====================
+  const handleUnwaiveMonth = useCallback(
+    async (studentId: number, studentName: string, monthKey: string) => {
+      if (
+        !window.confirm(
+          `هل تريد إلغاء إعفاء الطالب "${studentName}" لشهر ${getMonthLabel(monthKey)}؟\nستعود قيمة اشتراكه إلى الدخل الشهري المتوقع.`
+        )
+      )
+        return;
+
+      setWaivingStudentId(studentId);
+      try {
+        await removeExemptedMonth(studentId, monthKey);
+        await fetchDashboardMetrics(() => false);
+        alert(`✅ تم إلغاء إعفاء "${studentName}" وإعادته إلى الدخل المتوقع.`);
+      } catch (err) {
+        console.error('Unwaive Month Error:', err);
+        alert('حدث خطأ أثناء إلغاء الإعفاء.');
+      } finally {
+        setWaivingStudentId(null);
       }
     },
     [fetchDashboardMetrics]
@@ -498,19 +564,42 @@ export default function DashboardTab({
       });
   }, [studentsWithDue, deferredCollectQuery]);
 
+  // ==================== كروت المؤشرات (مع كارت الإعفاءات الجديد) ====================
   const kpiCards = [
     {
       key: 'expectedRevenue',
       label: 'الدخل الشهري المتوقع',
       value: loading ? '...' : expectedRevenue.toLocaleString('en-US'),
-      subLabel: 'بناءً على الطلاب الحاليين',
+      subLabel:
+        exemptedCount > 0
+          ? `بعد خصم ${exemptedCount} إعفاء هذا الشهر`
+          : 'بناءً على الطلاب الحاليين',
       icon: '🎯',
       iconBg: 'bg-indigo-50 dark:bg-indigo-950/50',
       iconColor: 'text-indigo-600 dark:text-indigo-400',
       borderColor: 'border-slate-200 dark:border-slate-800',
       valueColor: 'text-indigo-600 dark:text-indigo-400',
+      subLabelColor: exemptedCount > 0 ? 'text-purple-500 dark:text-purple-400' : 'text-slate-400',
       onClick: () => onNavigateToTab?.('finance'),
       title: 'عرض التفاصيل المالية',
+      unit: 'ج.م',
+    },
+    {
+      key: 'exemptions',
+      label: `إعفاءات شهر ${formatDashboardMonthName(selectedRevenueMonth)}`,
+      value: loading ? '...' : exemptedAmount.toLocaleString('en-US'),
+      subLabel:
+        exemptedCount > 0
+          ? `${exemptedCount} طالب معفى — اضغط للتفاصيل`
+          : 'لا توجد إعفاءات هذا الشهر',
+      icon: '🎁',
+      iconBg: 'bg-purple-50 dark:bg-purple-950/50',
+      iconColor: 'text-purple-600 dark:text-purple-400',
+      borderColor: 'border-purple-200/60 dark:border-purple-900/40',
+      valueColor: 'text-purple-600 dark:text-purple-400',
+      subLabelColor: 'text-purple-500 dark:text-purple-400',
+      onClick: () => setShowExemptedModal(true),
+      title: 'عرض تفاصيل الإعفاءات',
       unit: 'ج.م',
     },
     {
@@ -611,7 +700,8 @@ export default function DashboardTab({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+      {/* ==================== كروت المؤشرات ==================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 sm:gap-4">
         {kpiCards.map((card) => {
           const isCollectedCard = card.key === 'collectedAmount';
           const collectionRate =
@@ -805,6 +895,7 @@ export default function DashboardTab({
               filteredDueStudents.map((student) => {
                 const reminderPhone = student.parent_phone || student.phone;
                 const phoneOk = !isPhoneMissing(reminderPhone);
+                const isWaiving = waivingStudentId === student.id;
                 return (
                   <div
                     key={student.id}
@@ -825,10 +916,11 @@ export default function DashboardTab({
                       </span>
                       <button
                         onClick={() => handleWaiveMonth(student.id, student.name, selectedRevenueMonth)}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm active:scale-95"
-                        title="إعفاء من هذا الشهر"
+                        disabled={isWaiving}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm active:scale-95"
+                        title={`إعفاء من شهر ${getMonthLabel(selectedRevenueMonth)}`}
                       >
-                        <span>🎁</span> إعفاء
+                        <span>🎁</span> {isWaiving ? '...' : 'إعفاء'}
                       </button>
                       <span
                         title={
@@ -994,6 +1086,7 @@ export default function DashboardTab({
         </div>
       </div>
 
+      {/* ==================== مودال التحصيل السريع ==================== */}
       {showCollectModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
@@ -1033,6 +1126,7 @@ export default function DashboardTab({
                 filteredCollectStudents.map((student) => {
                   const reminderPhone = student.parent_phone || student.phone;
                   const phoneOk = !isPhoneMissing(reminderPhone);
+                  const isWaiving = waivingStudentId === student.id;
                   return (
                     <div
                       key={student.id}
@@ -1052,11 +1146,12 @@ export default function DashboardTab({
                         </span>
                         <button
                           type="button"
+                          disabled={isWaiving}
                           onClick={() => handleWaiveMonth(student.id, student.name, selectedRevenueMonth)}
-                          className="rounded-lg bg-purple-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-purple-700"
-                          title="إعفاء من الشهر"
+                          className="rounded-lg bg-purple-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={`إعفاء من شهر ${getMonthLabel(selectedRevenueMonth)}`}
                         >
-                          🎁
+                          {isWaiving ? '⏳' : '🎁'}
                         </button>
                         <span
                           title={
@@ -1088,6 +1183,86 @@ export default function DashboardTab({
                           className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-indigo-700"
                         >
                           تحصيل
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== مودال تفاصيل الإعفاءات ==================== */}
+      {showExemptedModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={() => setShowExemptedModal(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl border border-purple-200 dark:border-purple-900 bg-white dark:bg-slate-900 p-5 shadow-xl max-h-[80vh] flex flex-col"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>🎁</span> إعفاءات شهر {formatDashboardMonthName(selectedRevenueMonth)}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {exemptedCount} طالب معفى — إجمالي {exemptedAmount.toLocaleString('en-US')} ج.م مخصومة من الدخل المتوقع
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExemptedModal(false)}
+                className="rounded-lg p-1 text-sm font-bold text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto space-y-2">
+              {exemptedStudents.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="text-3xl mb-2">🎁</div>
+                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                    لا توجد إعفاءات مسجلة لشهر {formatDashboardMonthName(selectedRevenueMonth)}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    استخدم زر "إعفاء" من قائمة المتأخرات المالية لإضافة إعفاء جديد
+                  </p>
+                </div>
+              ) : (
+                exemptedStudents.map((student) => {
+                  const isWaiving = waivingStudentId === student.id;
+                  return (
+                    <div
+                      key={student.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-purple-100 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/20 p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                          {student.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {student.grade || student.grade_level || '-'} — {student.subject || '-'}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-lg bg-purple-100 dark:bg-purple-900/50 px-2 py-1 text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                          {student.dueAmount.toLocaleString('en-US')} ج.م
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isWaiving}
+                          onClick={() =>
+                            handleUnwaiveMonth(student.id, student.name, selectedRevenueMonth)
+                          }
+                          className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="إلغاء الإعفاء وإعادته للدخل المتوقع"
+                        >
+                          {isWaiving ? '⏳' : '↩️ إلغاء الإعفاء'}
                         </button>
                       </div>
                     </div>
