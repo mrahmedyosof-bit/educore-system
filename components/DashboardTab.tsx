@@ -25,12 +25,12 @@ import {
 interface Student {
   id: number;
   name: string;
-  phone: string;
-  parent_phone: string;
-  grade_level: string;
-  group_name: string;
-  grade?: string;
-  subject?: string;
+  phone?: string | null;
+  parent_phone?: string | null;
+  grade_level?: string | null;
+  group_name?: string | null;
+  grade?: string | null;
+  subject?: string | null;
   discountAmount?: number;
   isExempt?: boolean;
   exempted_months?: string[] | null;
@@ -97,14 +97,17 @@ const attendanceBarColor = (pct: number): string => {
 };
 
 const attendanceBadgeClass = (pct: number): string => {
-  if (pct >= 75) return 'text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/60';
-  if (pct >= 50) return 'text-amber-700 dark:text-amber-300 bg-amber-100/70 dark:bg-amber-950/60';
+  if (pct >= 75)
+    return 'text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/60';
+  if (pct >= 50)
+    return 'text-amber-700 dark:text-amber-300 bg-amber-100/70 dark:bg-amber-950/60';
   if (pct > 0) return 'text-rose-700 dark:text-rose-300 bg-rose-100/70 dark:bg-rose-950/60';
   return 'text-slate-500 bg-slate-200/60 dark:bg-slate-800';
 };
 
 const formatDashboardMonth = (value: string): string => {
   const key = getMonthKey(value);
+
   if (!key) {
     const normalized = String(value ?? '')
       .normalize('NFKC')
@@ -116,10 +119,14 @@ const formatDashboardMonth = (value: string): string => {
         return String(arabicIndex >= 0 ? arabicIndex : easternIndex);
       })
       .replace(/[أإآ]/g, 'ا')
-      .replace(/[،؛,_\-./|]/g, ' ')
+      .replace(/[،؛,_.\/|-]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    const englishMonth = normalized.match(/(January|February|March|April|May|June|July|August|September|October|November|December)/i);
+
+    const englishMonth = normalized.match(
+      /(January|February|March|April|May|June|July|August|September|October|November|December)/i
+    );
+
     if (englishMonth) {
       const monthNames: Record<string, string> = {
         January: 'يناير',
@@ -135,13 +142,16 @@ const formatDashboardMonth = (value: string): string => {
         November: 'نوفمبر',
         December: 'ديسمبر',
       };
+
       return normalized.replace(
         /(January|February|March|April|May|June|July|August|September|October|November|December)/gi,
         (month) => monthNames[month.charAt(0).toUpperCase() + month.slice(1)] || month
       );
     }
+
     return normalized;
   }
+
   return getMonthLabel(key);
 };
 
@@ -171,15 +181,10 @@ const orderedDashboardMonthOptions: MonthOption[] = [
   ),
 ];
 
-export default function DashboardTab({
-  onOpenQRScanner,
-  onNavigateToTab,
-}: DashboardTabProps) {
+export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: DashboardTabProps) {
   const { settings: centerSettings } = useCenterSettings();
 
-  const [selectedRevenueMonth, setSelectedRevenueMonth] = useState<string>(
-    getCurrentMonthKey()
-  );
+  const [selectedRevenueMonth, setSelectedRevenueMonth] = useState<string>(getCurrentMonthKey());
   const [totalStudents, setTotalStudents] = useState<number>(0);
   const [collectedAmount, setCollectedAmount] = useState<number>(0);
   const [totalDueAmount, setTotalDueAmount] = useState<number>(0);
@@ -189,12 +194,13 @@ export default function DashboardTab({
   const [loading, setLoading] = useState<boolean>(true);
   const [expectedRevenue, setExpectedRevenue] = useState<number>(0);
   const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
+
   const [showCollectModal, setShowCollectModal] = useState(false);
   const [collectQuery, setCollectQuery] = useState('');
   const [dueSearchQuery, setDueSearchQuery] = useState('');
   const [dueSelectedGrade, setDueSelectedGrade] = useState('الكل');
 
-  // ==================== حالات الإعفاءات الجديدة ====================
+  // ==================== حالات الإعفاءات ====================
   const [exemptedAmount, setExemptedAmount] = useState<number>(0);
   const [exemptedCount, setExemptedCount] = useState<number>(0);
   const [exemptedStudents, setExemptedStudents] = useState<DueStudent[]>([]);
@@ -222,19 +228,25 @@ export default function DashboardTab({
 
         const todayDate = new Date().toISOString().split('T')[0];
 
-        const [{ data: todayAttendance, error: attendanceError }, { data: allStudents, error: studentsListError }] =
-          await Promise.all([
-            supabase.from('attendance').select('student_id, status').eq('date', todayDate),
-            supabase.from('students').select('id, group_name, grade_level'),
-          ]);
+        const [
+          { data: todayAttendance, error: attendanceError },
+          { data: allStudents, error: studentsListError },
+        ] = await Promise.all([
+          supabase.from('attendance').select('student_id, status').eq('date', todayDate),
+          supabase.from('students').select('id, group_name, grade_level'),
+        ]);
 
         if (attendanceError) throw attendanceError;
         if (studentsListError) throw studentsListError;
 
         const attendanceRows =
-          (todayAttendance as { student_id: number | null; status: string | null }[] | null) ?? [];
+          (todayAttendance as { student_id: number | null; status: string | null }[] | null) ??
+          [];
+
         const studentRows =
-          (allStudents as { id: number; group_name: string | null; grade_level: string | null }[] | null) ?? [];
+          (allStudents as
+            | { id: number; group_name: string | null; grade_level: string | null }[]
+            | null) ?? [];
 
         if (!cancelled()) setTodayAttendanceCount(attendanceRows.length);
 
@@ -245,13 +257,17 @@ export default function DashboardTab({
         );
 
         const groupsMap = new Map<string, GroupAttendance>();
+
         for (const s of studentRows) {
           const baseGroup = s.group_name || 'بدون مجموعة';
           const gradeShort = shortenGradeLabel(s.grade_level);
           const groupName = gradeShort ? `${baseGroup} - ${gradeShort}` : baseGroup;
+
           const entry = groupsMap.get(groupName) ?? { groupName, attendedCount: 0, totalCount: 0 };
+
           entry.totalCount += 1;
           if (attendedIds.has(s.id)) entry.attendedCount += 1;
+
           groupsMap.set(groupName, entry);
         }
 
@@ -273,6 +289,7 @@ export default function DashboardTab({
         allStudentsData.forEach((student) => {
           if (student.grade && student.subject && !student.isExempt) {
             const price = priceMatrix[priceKey(student.grade, student.subject)];
+
             if (typeof price === 'number' && Number.isFinite(price)) {
               const discount = student.discountAmount || 0;
               const netFee = calculateNetAmountDue(price, discount);
@@ -303,9 +320,11 @@ export default function DashboardTab({
             .filter((student) => {
               if (student.isExempt || !student.grade || !student.subject) return false;
               if (isMonthExempted(student, selectedRevenueMonth)) return false;
+
               const price = Number(priceMatrix[priceKey(student.grade, student.subject)]);
               const discount = Number(student.discountAmount ?? 0);
               const finalFee = calculateNetAmountDue(price, discount);
+
               return Number.isFinite(price) && finalFee > 0;
             })
             .map((student) => student.id)
@@ -316,6 +335,7 @@ export default function DashboardTab({
           .select('amount_paid, amount_remaining, month_name, created_at, student_id');
 
         const { data: paymentsData, error: paymentsError } = await paymentsQuery;
+
         if (paymentsError) throw paymentsError;
 
         const selectedMonthPayments = (paymentsData ?? []).filter(
@@ -323,10 +343,12 @@ export default function DashboardTab({
         );
 
         const studentsById = new Map(allStudentsData.map((student) => [student.id, student]));
+
         const paidByStudent = new Map<number, number>();
 
         selectedMonthPayments.forEach((payment) => {
           if (payment.student_id == null) return;
+
           paidByStudent.set(
             payment.student_id,
             (paidByStudent.get(payment.student_id) ?? 0) + (Number(payment.amount_paid) || 0)
@@ -334,12 +356,18 @@ export default function DashboardTab({
         });
 
         const remainingByStudent = new Map<number, number>();
+
         eligibleStudentIds.forEach((studentId) => {
           const student = studentsById.get(studentId);
           if (!student) return;
+
           const price = priceMatrix[priceKey(student.grade || '', student.subject || '')];
           const netAmountDue = calculateNetAmountDue(price, student.discountAmount);
-          const remaining = calculateRemainingAmount(netAmountDue, paidByStudent.get(studentId) ?? 0);
+          const remaining = calculateRemainingAmount(
+            netAmountDue,
+            paidByStudent.get(studentId) ?? 0
+          );
+
           if (remaining > 0) remainingByStudent.set(studentId, remaining);
         });
 
@@ -351,7 +379,9 @@ export default function DashboardTab({
             .from('students')
             .select('id, name, parent_phone, phone, grade_level')
             .in('id', studentIds);
+
           if (studentsError) throw studentsError;
+
           studentsMap = new Map((studentsData ?? []).map((s) => [s.id, s as DueStudent]));
         }
 
@@ -372,6 +402,7 @@ export default function DashboardTab({
 
         remainingByStudent.forEach((remaining, studentId) => {
           sumRemaining += remaining;
+
           const studentData = studentsMap.get(studentId);
           if (studentData) {
             dueMap[studentId] = {
@@ -388,7 +419,10 @@ export default function DashboardTab({
         }
 
         const recentPayments = selectedMonthPayments
-          .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          .sort(
+            (a, b) =>
+              new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+          )
           .slice(0, 5);
 
         const recentAttendance = attendanceRows.filter((r) => r.student_id != null).slice(0, 5);
@@ -397,6 +431,7 @@ export default function DashboardTab({
 
         for (const payment of recentPayments) {
           const studentData = studentsMap.get(payment.student_id);
+
           if (studentData) {
             activities.push({
               id: `payment-${payment.student_id}-${payment.created_at}`,
@@ -411,6 +446,7 @@ export default function DashboardTab({
 
         for (const attendance of recentAttendance) {
           const student = allStudentsData.find((s) => s.id === attendance.student_id);
+
           if (student) {
             activities.push({
               id: `attendance-${attendance.student_id}-${todayDate}`,
@@ -438,10 +474,12 @@ export default function DashboardTab({
 
   useEffect(() => {
     let cancelledFlag = false;
+
     void (async () => {
       await Promise.resolve();
       await fetchDashboardMetrics(() => cancelledFlag);
     })();
+
     return () => {
       cancelledFlag = true;
     };
@@ -449,10 +487,13 @@ export default function DashboardTab({
 
   useEffect(() => {
     let cancelledFlag = false;
+
     const handleDataReset = () => {
       void fetchDashboardMetrics(() => cancelledFlag);
     };
+
     window.addEventListener('educore:data-reset', handleDataReset);
+
     return () => {
       cancelledFlag = true;
       window.removeEventListener('educore:data-reset', handleDataReset);
@@ -465,11 +506,13 @@ export default function DashboardTab({
         alert('رقم ولي الأمر غير متوفر.');
         return;
       }
+
       const message = [
         `أهلاً بك، تذكير من ${centerSettings.centerName}:`,
         `المتبقي على الطالب/طالبة (${studentName}) مبلغ (${amount} ج.م).`,
         `يرجى التكرم بالسداد في أقرب وقت. شكراً لتعاونكم 🌹`,
       ].join('\n');
+
       if (!openWhatsApp(parentPhone, message)) {
         alert('رقم ولي الأمر غير صالح للواتساب.');
       }
@@ -483,14 +526,19 @@ export default function DashboardTab({
       const confirmMessage =
         `هل تريد إعفاء الطالب "${studentName}" من مصاريف شهر ${getMonthLabel(monthKey)}؟\n` +
         `سيتم خصم قيمة اشتراكه من الدخل الشهري المتوقع ونقله إلى كارت الإعفاءات.`;
+
       if (!window.confirm(confirmMessage)) return;
 
       setWaivingStudentId(studentId);
+
       try {
         await addExemptedMonth(studentId, monthKey);
         setStudentsWithDue((prev) => prev.filter((s) => s.id !== studentId));
         await fetchDashboardMetrics(() => false);
-        alert(`✅ تم إعفاء "${studentName}" من شهر ${getMonthLabel(monthKey)} وخصم القيمة من الدخل المتوقع.`);
+
+        alert(
+          `✅ تم إعفاء "${studentName}" من شهر ${getMonthLabel(monthKey)} وخصم القيمة من الدخل المتوقع.`
+        );
       } catch (err) {
         console.error('Waive Month Error:', err);
         alert('حدث خطأ أثناء عملية الإعفاء. يرجى المحاولة مرة أخرى.');
@@ -512,9 +560,11 @@ export default function DashboardTab({
         return;
 
       setWaivingStudentId(studentId);
+
       try {
         await removeExemptedMonth(studentId, monthKey);
         await fetchDashboardMetrics(() => false);
+
         alert(`✅ تم إلغاء إعفاء "${studentName}" وإعادته إلى الدخل المتوقع.`);
       } catch (err) {
         console.error('Unwaive Month Error:', err);
@@ -536,12 +586,15 @@ export default function DashboardTab({
 
   const filteredDueStudents = useMemo(() => {
     const q = deferredDueSearchQuery.trim().toLowerCase();
+
     return [...studentsWithDue]
       .sort((a, b) => b.dueAmount - a.dueAmount)
       .filter((s) => {
         const matchesGrade = dueSelectedGrade === 'الكل' || s.grade_level === dueSelectedGrade;
+
         if (!matchesGrade) return false;
         if (!q) return true;
+
         return (
           s.name.toLowerCase().includes(q) ||
           (s.parent_phone || '').toLowerCase().includes(q) ||
@@ -552,10 +605,12 @@ export default function DashboardTab({
 
   const filteredCollectStudents = useMemo(() => {
     const query = deferredCollectQuery.trim().toLowerCase();
+
     return [...studentsWithDue]
       .sort((a, b) => b.dueAmount - a.dueAmount)
       .filter((student) => {
         if (!query) return true;
+
         return (
           student.name.toLowerCase().includes(query) ||
           (student.parent_phone || '').toLowerCase().includes(query) ||
@@ -564,7 +619,7 @@ export default function DashboardTab({
       });
   }, [studentsWithDue, deferredCollectQuery]);
 
-  // ==================== كروت المؤشرات (مع كارت الإعفاءات الجديد) ====================
+  // ==================== كروت المؤشرات (مع كارت الإعفاءات) ====================
   const kpiCards = [
     {
       key: 'expectedRevenue',
@@ -579,7 +634,8 @@ export default function DashboardTab({
       iconColor: 'text-indigo-600 dark:text-indigo-400',
       borderColor: 'border-slate-200 dark:border-slate-800',
       valueColor: 'text-indigo-600 dark:text-indigo-400',
-      subLabelColor: exemptedCount > 0 ? 'text-purple-500 dark:text-purple-400' : 'text-slate-400',
+      subLabelColor:
+        exemptedCount > 0 ? 'text-purple-500 dark:text-purple-400' : 'text-slate-400',
       onClick: () => onNavigateToTab?.('finance'),
       title: 'عرض التفاصيل المالية',
       unit: 'ج.م',
@@ -650,6 +706,7 @@ export default function DashboardTab({
 
   return (
     <div className="w-full space-y-6" dir="rtl">
+      {/* ==================== الإجراءات السريعة ==================== */}
       <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
@@ -666,6 +723,7 @@ export default function DashboardTab({
             </div>
           </div>
         </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 items-stretch">
           <button
             onClick={() => onOpenQRScanner?.()}
@@ -673,24 +731,28 @@ export default function DashboardTab({
           >
             <span className="text-base">📷</span> تسجيل حضور (QR)
           </button>
+
           <button
             onClick={() => onNavigateToTab?.('students')}
             className="h-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
           >
             <span className="text-base">👤</span> إضافة طالب جديد
           </button>
+
           <button
             onClick={() => setShowCollectModal(true)}
             className="h-full bg-amber-500 hover:bg-amber-600 text-white font-bold p-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
           >
             <span className="text-base">💳</span> تحصيل رسوم
           </button>
+
           <button
             onClick={() => onNavigateToTab?.('finance')}
             className="h-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold p-3 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 transition active:scale-95"
           >
             <span className="text-base">📊</span> التقارير المالية
           </button>
+
           <button
             onClick={() => onNavigateToTab?.('setup')}
             className="h-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold p-3 rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 transition active:scale-95"
@@ -708,6 +770,7 @@ export default function DashboardTab({
             expectedRevenue > 0
               ? Math.min(100, Math.round((collectedAmount / expectedRevenue) * 100))
               : 0;
+
           return (
             <div
               key={card.key}
@@ -726,13 +789,16 @@ export default function DashboardTab({
                     {card.icon}
                   </div>
                 </div>
+
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <h3
                       className={`text-2xl font-black ${card.valueColor || 'text-slate-900 dark:text-white'}`}
                     >
-                      {card.value} <span className="text-xs font-normal text-slate-400">{card.unit}</span>
+                      {card.value}{' '}
+                      <span className="text-xs font-normal text-slate-400">{card.unit}</span>
                     </h3>
+
                     {isCollectedCard && expectedRevenue > 0 && (
                       <span
                         className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-black ${
@@ -746,6 +812,7 @@ export default function DashboardTab({
                       </span>
                     )}
                   </div>
+
                   {card.showMonthSelector && (
                     <div
                       className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg"
@@ -767,10 +834,12 @@ export default function DashboardTab({
                   )}
                 </div>
               </div>
+
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80">
                 <p className={`text-[11px] font-semibold ${card.subLabelColor || 'text-slate-400'}`}>
                   {card.subLabel}
                 </p>
+
                 {isCollectedCard && expectedRevenue > 0 && (
                   <div className="mt-2.5">
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
@@ -789,6 +858,7 @@ export default function DashboardTab({
         })}
       </div>
 
+      {/* ==================== حضور اليوم + المتأخرات ==================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -799,6 +869,7 @@ export default function DashboardTab({
               {groupSessions.length} مجموعات
             </span>
           </div>
+
           <div className="space-y-3">
             {groupSessions.length === 0 ? (
               <div className="text-center py-10">
@@ -816,6 +887,7 @@ export default function DashboardTab({
                   session.totalCount > 0
                     ? Math.round((session.attendedCount / session.totalCount) * 100)
                     : 0;
+
                 return (
                   <div
                     key={session.groupName}
@@ -830,6 +902,7 @@ export default function DashboardTab({
                           إجمالي الطلاب: {session.totalCount}
                         </p>
                       </div>
+
                       <div className="text-left">
                         <span
                           className={`text-xs font-bold px-2.5 py-1 rounded-lg inline-block ${attendanceBadgeClass(pct)}`}
@@ -838,12 +911,14 @@ export default function DashboardTab({
                         </span>
                       </div>
                     </div>
+
                     <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${attendanceBarColor(pct)}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
+
                     <button
                       type="button"
                       onClick={() => onNavigateToTab?.('attendance')}
@@ -867,6 +942,7 @@ export default function DashboardTab({
               {studentsWithDue.length} حالة
             </span>
           </div>
+
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="text"
@@ -876,6 +952,7 @@ export default function DashboardTab({
               aria-label="البحث في المتأخرات المالية"
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right text-xs font-bold text-slate-800 focus:border-rose-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
+
             <select
               value={dueSelectedGrade}
               onChange={(e) => setDueSelectedGrade(e.target.value)}
@@ -890,12 +967,14 @@ export default function DashboardTab({
               ))}
             </select>
           </div>
+
           <div className="space-y-3 overflow-y-auto max-h-[320px] pl-1">
             {filteredDueStudents.length > 0 ? (
               filteredDueStudents.map((student) => {
                 const reminderPhone = student.parent_phone || student.phone;
                 const phoneOk = !isPhoneMissing(reminderPhone);
                 const isWaiving = waivingStudentId === student.id;
+
                 return (
                   <div
                     key={student.id}
@@ -910,18 +989,23 @@ export default function DashboardTab({
                         <span className="font-mono">{phoneOk ? reminderPhone : 'بدون رقم'}</span>
                       </p>
                     </div>
+
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-black text-rose-600 dark:text-rose-400 bg-rose-100/80 dark:bg-rose-900/50 px-2 py-1 rounded-md">
                         {student.dueAmount} ج.م
                       </span>
+
                       <button
-                        onClick={() => handleWaiveMonth(student.id, student.name, selectedRevenueMonth)}
+                        onClick={() =>
+                          handleWaiveMonth(student.id, student.name, selectedRevenueMonth)
+                        }
                         disabled={isWaiving}
                         className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm active:scale-95"
                         title={`إعفاء من شهر ${getMonthLabel(selectedRevenueMonth)}`}
                       >
                         <span>🎁</span> {isWaiving ? '...' : 'إعفاء'}
                       </button>
+
                       <span
                         title={
                           phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'
@@ -964,13 +1048,16 @@ export default function DashboardTab({
                 <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-1">
                   لا توجد متأخرات مالية حالياً
                 </p>
-                <p className="text-xs text-slate-400">جميع الطلاب قاموا بسداد مستحقاتهم بالكامل</p>
+                <p className="text-xs text-slate-400">
+                  جميع الطلاب قاموا بسداد مستحقاتهم بالكامل
+                </p>
               </div>
             )}
           </div>
         </div>
       </div>
 
+      {/* ==================== النشاط والأحداث الأخيرة ==================== */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
           <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
@@ -980,6 +1067,7 @@ export default function DashboardTab({
             {recentActivities.length} عملية
           </span>
         </div>
+
         <div className="space-y-2 max-h-[300px] overflow-y-auto">
           {recentActivities.length === 0 ? (
             <div className="text-center py-8">
@@ -1008,17 +1096,20 @@ export default function DashboardTab({
                 >
                   {activity.type === 'payment' ? '💰' : activity.type === 'attendance' ? '📈' : '👤'}
                 </div>
+
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                     {activity.studentName ? `${activity.studentName} — ` : ''}
                     {activity.description}
                   </p>
+
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                     {activity.amount && (
                       <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                         {activity.amount.toLocaleString('en-US')} ج.م
                       </span>
                     )}
+
                     <span className="text-slate-400 dark:text-slate-500">
                       {new Date(activity.timestamp).toLocaleString('ar-EG-u-nu-latn', {
                         hour: '2-digit',
@@ -1029,6 +1120,7 @@ export default function DashboardTab({
                     </span>
                   </p>
                 </div>
+
                 <div className="text-[11px] text-slate-400 font-medium">
                   {activity.type === 'payment' && 'مكتمل'}
                 </div>
@@ -1038,6 +1130,7 @@ export default function DashboardTab({
         </div>
       </div>
 
+      {/* ==================== تهيئة المناهج ==================== */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
         <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
           <h4 className="font-bold text-slate-900 dark:text-white text-sm">
@@ -1047,11 +1140,13 @@ export default function DashboardTab({
             إدارة الخيارات والمناهج المتاحة في المركز
           </p>
         </div>
+
         {settingsError && (
           <div className="rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 p-3 text-xs font-bold text-rose-600 dark:text-rose-400">
             {settingsError}
           </div>
         )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           <CurriculumMiniSection
             title="المراحل الدراسية"
@@ -1063,6 +1158,7 @@ export default function DashboardTab({
             badgeClass="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
             buttonClass="bg-indigo-600 hover:bg-indigo-700"
           />
+
           <CurriculumMiniSection
             title="الصفوف الدراسية"
             inputPlaceholder="صف جديد..."
@@ -1073,6 +1169,7 @@ export default function DashboardTab({
             badgeClass="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-900"
             buttonClass="bg-emerald-600 hover:bg-emerald-700"
           />
+
           <CurriculumMiniSection
             title="المواد الدراسية"
             inputPlaceholder="مادة جديدة..."
@@ -1101,6 +1198,7 @@ export default function DashboardTab({
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 💳 تحصيل سريع — ابحث بالاسم أو الهاتف
               </h3>
+
               <button
                 type="button"
                 onClick={() => setShowCollectModal(false)}
@@ -1109,6 +1207,7 @@ export default function DashboardTab({
                 ✕
               </button>
             </div>
+
             <input
               type="text"
               value={collectQuery}
@@ -1117,6 +1216,7 @@ export default function DashboardTab({
               autoFocus
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-900 dark:text-white focus:border-indigo-500 focus:outline-none"
             />
+
             <div className="mt-3 max-h-[50vh] space-y-2 overflow-y-auto">
               {filteredCollectStudents.length === 0 ? (
                 <p className="py-8 text-center text-xs font-bold text-slate-400">
@@ -1127,6 +1227,7 @@ export default function DashboardTab({
                   const reminderPhone = student.parent_phone || student.phone;
                   const phoneOk = !isPhoneMissing(reminderPhone);
                   const isWaiving = waivingStudentId === student.id;
+
                   return (
                     <div
                       key={student.id}
@@ -1140,19 +1241,24 @@ export default function DashboardTab({
                           {phoneOk ? reminderPhone : 'بدون رقم'}
                         </div>
                       </div>
+
                       <div className="flex shrink-0 items-center gap-2">
                         <span className="rounded-lg bg-rose-100 dark:bg-rose-900/50 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300">
                           {student.dueAmount} ج.م
                         </span>
+
                         <button
                           type="button"
                           disabled={isWaiving}
-                          onClick={() => handleWaiveMonth(student.id, student.name, selectedRevenueMonth)}
+                          onClick={() =>
+                            handleWaiveMonth(student.id, student.name, selectedRevenueMonth)
+                          }
                           className="rounded-lg bg-purple-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           title={`إعفاء من شهر ${getMonthLabel(selectedRevenueMonth)}`}
                         >
                           {isWaiving ? '⏳' : '🎁'}
                         </button>
+
                         <span
                           title={
                             phoneOk ? 'إرسال تذكير عبر الواتساب' : 'برجاء إضافة رقم ولي الأمر أولاً'
@@ -1162,9 +1268,15 @@ export default function DashboardTab({
                           <button
                             type="button"
                             disabled={!phoneOk}
-                            onClick={() =>
-                              phoneOk && handleSendWhatsApp(reminderPhone!, student.name, student.dueAmount)
-                            }
+                            onClick={() => {
+                              if (phoneOk) {
+                                handleSendWhatsApp(
+                                  reminderPhone!,
+                                  student.name,
+                                  student.dueAmount
+                                );
+                              }
+                            }}
                             className={
                               phoneOk
                                 ? 'rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-emerald-700'
@@ -1174,6 +1286,7 @@ export default function DashboardTab({
                             💬
                           </button>
                         </span>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -1211,9 +1324,11 @@ export default function DashboardTab({
                   <span>🎁</span> إعفاءات شهر {formatDashboardMonthName(selectedRevenueMonth)}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {exemptedCount} طالب معفى — إجمالي {exemptedAmount.toLocaleString('en-US')} ج.م مخصومة من الدخل المتوقع
+                  {exemptedCount} طالب معفى — إجمالي {exemptedAmount.toLocaleString('en-US')} ج.م
+                  مخصومة من الدخل المتوقع
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setShowExemptedModal(false)}
@@ -1222,6 +1337,7 @@ export default function DashboardTab({
                 ✕
               </button>
             </div>
+
             <div className="overflow-y-auto space-y-2">
               {exemptedStudents.length === 0 ? (
                 <div className="text-center py-10">
@@ -1236,6 +1352,7 @@ export default function DashboardTab({
               ) : (
                 exemptedStudents.map((student) => {
                   const isWaiving = waivingStudentId === student.id;
+
                   return (
                     <div
                       key={student.id}
@@ -1249,10 +1366,12 @@ export default function DashboardTab({
                           {student.grade || student.grade_level || '-'} — {student.subject || '-'}
                         </div>
                       </div>
+
                       <div className="flex shrink-0 items-center gap-2">
                         <span className="rounded-lg bg-purple-100 dark:bg-purple-900/50 px-2 py-1 text-[11px] font-bold text-purple-700 dark:text-purple-300">
                           {student.dueAmount.toLocaleString('en-US')} ج.م
                         </span>
+
                         <button
                           type="button"
                           disabled={isWaiving}
@@ -1301,9 +1420,12 @@ function CurriculumMiniSection({
 
   const handleAdd = async () => {
     if (!newValue.trim() || isAdding) return;
+
     setIsAdding(true);
+
     try {
       const ok = await onAdd(newValue.trim());
+
       if (ok) {
         setNewValue('');
       } else {
@@ -1320,6 +1442,7 @@ function CurriculumMiniSection({
   return (
     <div className="space-y-2.5">
       <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200">{title}</h5>
+
       <div className="flex gap-2">
         <input
           type="text"
@@ -1335,6 +1458,7 @@ function CurriculumMiniSection({
           disabled={loading || isAdding}
           className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-1.5 px-3 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 disabled:opacity-50"
         />
+
         <button
           type="button"
           onClick={() => void handleAdd()}
@@ -1344,6 +1468,7 @@ function CurriculumMiniSection({
           {isAdding ? '...' : 'إضافة'}
         </button>
       </div>
+
       <div className="flex flex-wrap gap-1.5">
         {items.map((item, idx) => (
           <span key={idx} className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeClass}`}>
