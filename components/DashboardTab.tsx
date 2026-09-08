@@ -200,7 +200,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
   const [dueSearchQuery, setDueSearchQuery] = useState('');
   const [dueSelectedGrade, setDueSelectedGrade] = useState('الكل');
 
-  // ==================== حالات الإعفاءات ====================
   const [exemptedAmount, setExemptedAmount] = useState<number>(0);
   const [exemptedCount, setExemptedCount] = useState<number>(0);
   const [exemptedStudents, setExemptedStudents] = useState<DueStudent[]>([]);
@@ -280,7 +279,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         const allStudentsData = await getStudents();
         const priceMatrix = await getPriceMatrix();
 
-        // ==================== حساب الإعفاءات + الدخل المتوقع بعد الخصم ====================
         let expectedTotal = 0;
         let exemptedTotal = 0;
         let exemptedCounter = 0;
@@ -295,12 +293,10 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
               const netFee = calculateNetAmountDue(price, discount);
 
               if (isMonthExempted(student, selectedRevenueMonth)) {
-                // طالب معفى من الشهر الحالي: قيمته تروح لكارت الإعفاءات ومش تدخل الدخل المتوقع
                 exemptedTotal += netFee;
                 exemptedCounter += 1;
                 exemptedList.push({ ...student, dueAmount: netFee });
               } else {
-                // طالب غير معفى: يدخل في الدخل الشهري المتوقع
                 expectedTotal += netFee;
               }
             }
@@ -314,7 +310,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
           setExemptedStudents(exemptedList);
         }
 
-        // الطلاب المؤهلين للمديونية: نستثني المعفيين من الشهر الحالي
         const eligibleStudentIds = new Set(
           allStudentsData
             .filter((student) => {
@@ -520,7 +515,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
     [centerSettings.centerName]
   );
 
-  // ==================== إعفاء طالب من الشهر الحالي ====================
   const handleWaiveMonth = useCallback(
     async (studentId: number, studentName: string, monthKey: string) => {
       const confirmMessage =
@@ -549,7 +543,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
     [fetchDashboardMetrics]
   );
 
-  // ==================== إلغاء إعفاء طالب ====================
   const handleUnwaiveMonth = useCallback(
     async (studentId: number, studentName: string, monthKey: string) => {
       if (
@@ -619,7 +612,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
       });
   }, [studentsWithDue, deferredCollectQuery]);
 
-  // ==================== كروت المؤشرات (مع كارت الإعفاءات) ====================
   const kpiCards = [
     {
       key: 'expectedRevenue',
@@ -706,7 +698,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
 
   return (
     <div className="w-full space-y-6" dir="rtl">
-      {/* ==================== الإجراءات السريعة ==================== */}
       <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
@@ -762,7 +753,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         </div>
       </div>
 
-      {/* ==================== كروت المؤشرات ==================== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 sm:gap-4">
         {kpiCards.map((card) => {
           const isCollectedCard = card.key === 'collectedAmount';
@@ -858,7 +848,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         })}
       </div>
 
-      {/* ==================== حضور اليوم + المتأخرات ==================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -1057,7 +1046,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         </div>
       </div>
 
-      {/* ==================== النشاط والأحداث الأخيرة ==================== */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
           <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
@@ -1130,7 +1118,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         </div>
       </div>
 
-      {/* ==================== تهيئة المناهج ==================== */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
         <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
           <h4 className="font-bold text-slate-900 dark:text-white text-sm">
@@ -1183,7 +1170,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         </div>
       </div>
 
-      {/* ==================== مودال التحصيل السريع ==================== */}
       {showCollectModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
@@ -1307,7 +1293,6 @@ export default function DashboardTab({ onOpenQRScanner, onNavigateToTab }: Dashb
         </div>
       )}
 
-      {/* ==================== مودال تفاصيل الإعفاءات ==================== */}
       {showExemptedModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
