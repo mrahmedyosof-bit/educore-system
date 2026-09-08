@@ -75,6 +75,7 @@ let paymentEventSeq = 0;
 interface PaymentRecord extends ServicePaymentRecord {
   student?: Student;
   month_key?: string;
+  isExempted?: boolean;
 }
 
 const buildPaymentRecord = (
@@ -82,11 +83,14 @@ const buildPaymentRecord = (
   studentsByIdMap: Map<number, Student>
 ): PaymentRecord => {
   const month_key = getMonthKey(payment.month_name);
+  const student = payment.student_id ? studentsByIdMap.get(payment.student_id) : undefined;
+  const isExempted = student && month_key ? isMonthExempted(student, month_key) : false;
   return {
     ...payment,
     month_key,
     month_name: month_key ? getMonthLabel(month_key) : String(payment.month_name ?? ''),
-    student: payment.student_id ? studentsByIdMap.get(payment.student_id) : undefined,
+    student,
+    isExempted,
   };
 };
 
@@ -432,7 +436,8 @@ export default function FinanceTab() {
       ? studentsById.get(Number(selectedStudentId))
       : undefined;
     const zeroDuePayment = Boolean(
-      selectedStudent && (isStudentExempt(selectedStudent) || getStudentNetAmountDue(selectedStudent) === 0)
+      selectedStudent &&
+        (isStudentExempt(selectedStudent) || getStudentNetAmountDue(selectedStudent) === 0)
     );
     const zeroPaidAllowed = zeroDuePayment || editingPaymentId !== null;
     const paymentMonthKey = getMonthKey(monthName);
@@ -798,27 +803,23 @@ export default function FinanceTab() {
     });
   }, []);
 
-  // ==================== إعفاء طالب من شهر معين (إعفاء دائم مسجل في ملف الطالب) ====================
+  // ==================== إعفاء طالب من شهر (حفظ دائم في Supabase) ====================
   const handleExemptStudentMonth = useCallback(
     async (student: Student, monthKey: string) => {
       if (!monthKey) {
         showToast({ type: 'error', text: 'يرجى اختيار شهر صالح أولاً.' });
         return;
       }
-      if (!window.confirm(`هل تريد إعفاء الطالب ${student.name} من مصاريف شهر ${getMonthLabel(monthKey)} فقط؟`)) return;
+      if (!window.confirm(`هل تريد إعفاء الطالب ${student.name} من مصاريف شهر ${getMonthLabel(monthKey)}؟`)) return;
       setLoading(true);
       setMessage(null);
       try {
         await addExemptedMonth(student.id, monthKey);
-        emitPaymentUpdate({
-          type: 'payment-updated',
-          studentId: student.id,
-          timestamp: ++paymentEventSeq,
-        });
+        emitPaymentUpdate({ type: 'payment-updated', studentId: student.id, timestamp: ++paymentEventSeq });
         await fetchData();
-        const exemptSuccessText = `تم إعفاء الطالب ${student.name} من مصاريف شهر ${getMonthLabel(monthKey)} بنجاح.`;
-        setMessage({ type: 'success', text: exemptSuccessText });
-        showToast({ type: 'success', text: exemptSuccessText });
+        const text = `تم إعفاء الطالب ${student.name} من مصاريف شهر ${getMonthLabel(monthKey)} بنجاح.`;
+        setMessage({ type: 'success', text });
+        showToast({ type: 'success', text });
         playSuccessSound();
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'خطأ غير معروف';
@@ -830,31 +831,18 @@ export default function FinanceTab() {
     [fetchData, showToast, playSuccessSound]
   );
 
-  const handleMonthlyExempt = useCallback(
-    async (payment: PaymentRecord) => {
-      if (!payment.student) return;
-      const monthKey = payment.month_key || getMonthKey(payment.month_name);
-      await handleExemptStudentMonth(payment.student, monthKey);
-    },
-    [handleExemptStudentMonth]
-  );
-
-  const handleRemoveMonthlyExempt = useCallback(
+  const handleRemoveExemptStudentMonth = useCallback(
     async (student: Student, monthKey: string) => {
       if (!monthKey) {
         showToast({ type: 'error', text: 'شهر غير صالح.' });
         return;
       }
-      if (!window.confirm(`هل تريد إلغاء إعفاء الطالب ${student.name} لشهر ${getMonthLabel(monthKey)}؟ ستعود القيمة إلى الدخل المتوقع.`)) return;
+      if (!window.confirm(`هل تريد إلغاء إعفاء الطالب ${student.name} لشهر ${getMonthLabel(monthKey)}؟`)) return;
       setLoading(true);
       setMessage(null);
       try {
         await removeExemptedMonth(student.id, monthKey);
-        emitPaymentUpdate({
-          type: 'payment-updated',
-          studentId: student.id,
-          timestamp: ++paymentEventSeq,
-        });
+        emitPaymentUpdate({ type: 'payment-updated', studentId: student.id, timestamp: ++paymentEventSeq });
         await fetchData();
         const text = `تم إلغاء إعفاء الطالب ${student.name} لشهر ${getMonthLabel(monthKey)}.`;
         setMessage({ type: 'success', text });
@@ -867,6 +855,15 @@ export default function FinanceTab() {
       }
     },
     [fetchData, showToast]
+  );
+
+  const handleMonthlyExempt = useCallback(
+    async (payment: PaymentRecord) => {
+      if (!payment.student) return;
+      const monthKey = payment.month_key || getMonthKey(payment.month_name);
+      await handleExemptStudentMonth(payment.student, monthKey);
+    },
+    [handleExemptStudentMonth]
   );
 
   const handleCancelEdit = useCallback(() => {
@@ -949,9 +946,6 @@ export default function FinanceTab() {
     };
   }, []);
 
-  const revenueMonthKey = filterMonth === 'الكل' ? currentMonthKey : getMonthKey(filterMonth);
-  const revenueMonthLabel = revenueMonthKey ? getMonthLabel(revenueMonthKey) : 'الكل';
-
   const currentAcademicYearPayments = useMemo(
     () =>
       payments.filter(
@@ -960,13 +954,16 @@ export default function FinanceTab() {
     [payments, centerSettings.academicYear]
   );
 
+  const revenueMonthKey = filterMonth === 'الكل' ? currentMonthKey : getMonthKey(filterMonth);
+  const revenueMonthLabel = revenueMonthKey ? getMonthLabel(revenueMonthKey) : 'الكل';
+
   const paymentsWithStatus = useMemo(() => {
     return currentAcademicYearPayments.map(payment => {
       const paymentMonthKey = payment.month_key || getMonthKey(payment.month_name);
-      const studentExemptedForMonth = payment.student
+      const studentExempted = payment.student
         ? isMonthExempted(payment.student, paymentMonthKey)
         : false;
-      const remaining = studentExemptedForMonth
+      const remaining = studentExempted
         ? 0
         : payment.student
           ? calculateRemainingAmount(getStudentNetAmountDue(payment.student), payment.amount_paid)
@@ -974,7 +971,7 @@ export default function FinanceTab() {
       const { isCurrent, isPast, isFuture } = getMonthStatus(paymentMonthKey, currentMonthKey);
       let statusType: 'paid' | 'overdue' | 'due' | 'future' = 'due';
       let statusText = '';
-      if (studentExemptedForMonth) {
+      if (studentExempted) {
         statusType = 'paid';
         statusText = 'معفى من هذا الشهر 🎁';
       } else if (remaining <= 0) {
@@ -1001,6 +998,7 @@ export default function FinanceTab() {
       return {
         ...payment,
         month_key: paymentMonthKey,
+        isExempted: studentExempted,
         status: { statusType, statusText, remaining },
       };
     });
@@ -1009,7 +1007,8 @@ export default function FinanceTab() {
   const filteredPayments = useMemo(
     () =>
       paymentsWithStatus.filter((p) => {
-        const monthMatch = filterMonth === 'الكل' || (p.month_key || getMonthKey(p.month_name)) === filterMonth;
+        const monthMatch =
+          filterMonth === 'الكل' || (p.month_key || getMonthKey(p.month_name)) === filterMonth;
         const gradeMatch = filterGrade === 'الكل' || p.student?.grade === filterGrade;
         const subjectMatch = filterSubject === 'كل المواد' || p.student?.subject === filterSubject;
         return monthMatch && gradeMatch && subjectMatch;
@@ -1034,10 +1033,7 @@ export default function FinanceTab() {
         const remaining = toFiniteAmount(payment.amount_remaining);
         const { error } = await supabase
           .from('payments')
-          .update({
-            amount_paid: 0,
-            amount_remaining: paid + remaining,
-          })
+          .update({ amount_paid: 0, amount_remaining: paid + remaining })
           .eq('id', payment.id);
         if (error) throw error;
       }
@@ -1072,10 +1068,7 @@ export default function FinanceTab() {
     setIsSubmitting(true);
     try {
       for (const payment of filteredPayments) {
-        const { error } = await supabase
-          .from('payments')
-          .update({ amount_remaining: 0 })
-          .eq('id', payment.id);
+        const { error } = await supabase.from('payments').update({ amount_remaining: 0 }).eq('id', payment.id);
         if (error) throw error;
       }
       setZeroDebtOpen(false);
@@ -1134,7 +1127,7 @@ export default function FinanceTab() {
     return uniqueStudents.filter((s) => s.grade && s.subject && !isStudentExempt(s));
   }, [uniqueStudents]);
 
-  // ==================== الطلاب المعفيين من الشهر الحالي (كارت الإعفاءات) ====================
+  // ==================== الطلاب المعفيون من الشهر الحالي ====================
   const exemptedStudentsThisMonth = useMemo(() => {
     return payingStudents.filter((s) => isMonthExempted(s, revenueMonthKey));
   }, [payingStudents, revenueMonthKey]);
@@ -1150,7 +1143,12 @@ export default function FinanceTab() {
     return total;
   }, [exemptedStudentsThisMonth, priceMatrix]);
 
-  // ==================== الدخل المتوقع بعد خصم الإعفاءات ====================
+  const targetStudentsCount = useMemo(
+    () => payingStudents.length - exemptedStudentsThisMonth.length,
+    [payingStudents, exemptedStudentsThisMonth]
+  );
+
+  // الدخل المتوقع بعد خصم المعفيين من الشهر الحالي
   const expectedMonthlyIncome = useMemo(() => {
     let total = 0;
     payingStudents.forEach((student) => {
@@ -1528,7 +1526,9 @@ export default function FinanceTab() {
             <h3 className="text-3xl font-black mt-1 text-purple-600">
               {formatCurrency(exemptedMonthlyAmount)}
             </h3>
-            <p className="text-[11px] font-bold mt-1 text-purple-400">مخصومة من إجمالي المستحق ↗</p>
+            <p className="text-[11px] font-bold mt-1 text-purple-400">
+              {exemptedStudentsThisMonth.length > 0 ? 'مخصومة من المستحق ↗' : 'لا توجد إعفاءات'}
+            </p>
           </div>
           <div className="text-3xl bg-purple-50 p-3 rounded-2xl text-purple-600">🎁</div>
         </div>
@@ -1593,7 +1593,7 @@ export default function FinanceTab() {
               {collectionRate}%
             </h3>
             <p className="text-[11px] font-bold mt-1 text-blue-400">
-              من إجمالي {payingStudents.length - exemptedStudentsThisMonth.length} طالب مستهدف
+              من إجمالي {targetStudentsCount} طالب مستهدف
             </p>
           </div>
           <div className="text-3xl bg-blue-50 p-3 rounded-2xl text-blue-600">📊</div>
@@ -2037,7 +2037,7 @@ export default function FinanceTab() {
                     (p.month_key || getMonthKey(p.month_name)) === targetMonthKey
                   );
                   const paidAmount = existingPayment ? toFiniteAmount(existingPayment.amount_paid) : 0;
-                  const remainingAmount = calculateRemainingAmount(studentDue, paidAmount);
+                  const remainingAmount = calculateRemainingAmount(studentDue, paidAmount, studentMonthExempted);
                   const isPaid = paidAmount >= studentDue;
                   const isPartial = paidAmount > 0 && paidAmount < studentDue;
                   return (
@@ -2091,7 +2091,7 @@ export default function FinanceTab() {
                           ) : studentMonthExempted ? (
                             <button
                               type="button"
-                              onClick={() => handleRemoveMonthlyExempt(student, targetMonthKey)}
+                              onClick={() => handleRemoveExemptStudentMonth(student, targetMonthKey)}
                               className="rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 text-[10px] font-bold transition"
                               title="إلغاء إعفاء هذا الشهر وإعادته للدخل المتوقع"
                             >
@@ -2109,7 +2109,7 @@ export default function FinanceTab() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleMonthlyExempt(existingPayment!)}
+                                onClick={() => handleExemptStudentMonth(student, targetMonthKey)}
                                 className="rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 text-[10px] font-bold transition"
                                 title="إعفاء من هذا الشهر"
                               >
@@ -2300,6 +2300,16 @@ export default function FinanceTab() {
                       <td className="p-4">
                         <div className="flex items-center gap-2">
                           {statusBadge}
+                          {payment.isExempted && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExemptStudentMonth(payment.student!, payment.month_key || getMonthKey(payment.month_name))}
+                              className="rounded-lg bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700 transition hover:bg-purple-100"
+                              title="إلغاء الإعفاء"
+                            >
+                              ↩️ إلغاء الإعفاء
+                            </button>
+                          )}
                           {remaining > 0 && (
                             <>
                               {(() => {
@@ -2986,6 +2996,80 @@ export default function FinanceTab() {
         </div>
       )}
 
+      {/* ==================== مودال تفاصيل الإعفاءات ==================== */}
+      {showExemptedModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={() => setShowExemptedModal(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl border border-purple-200 dark:border-purple-900 bg-white dark:bg-slate-900 p-5 shadow-xl max-h-[80vh] flex flex-col"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>🎁</span> إعفاءات شهر {revenueMonthLabel}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {exemptedStudentsThisMonth.length} طالب معفى — إجمالي {formatCurrency(exemptedMonthlyAmount)} مخصومة من الدخل المتوقع
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExemptedModal(false)}
+                className="rounded-lg p-1 text-sm font-bold text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto space-y-2">
+              {exemptedStudentsThisMonth.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="text-3xl mb-2">🎁</div>
+                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                    لا توجد إعفاءات مسجلة لشهر {revenueMonthLabel}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    استخدم زر "🎁 إعفاء" من جدول التحصيل السريع لإضافة إعفاء جديد
+                  </p>
+                </div>
+              ) : (
+                exemptedStudentsThisMonth.map((student) => (
+                  <div
+                    key={student.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-purple-100 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/20 p-2.5"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                        {student.name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {student.grade || '-'} — {student.subject || '-'}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="rounded-lg bg-purple-100 dark:bg-purple-900/50 px-2 py-1 text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                        {formatCurrency(getStudentFinalFee(student))}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExemptStudentMonth(student, revenueMonthKey)}
+                        className="rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                        title="إلغاء الإعفاء وإعادته للدخل المتوقع"
+                      >
+                        ↩️ إلغاء الإعفاء
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ==================== مودال تحصيل المجموعة ==================== */}
       {showBulkPaymentModal ? (
         <div
@@ -3193,82 +3277,6 @@ export default function FinanceTab() {
           </div>
         </div>
       ) : null}
-
-      {/* ==================== مودال تفاصيل الإعفاءات ==================== */}
-      {showExemptedModal && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
-          onClick={() => setShowExemptedModal(false)}
-        >
-          <div
-            className="w-full max-w-2xl rounded-3xl border border-purple-200 bg-white p-6 shadow-2xl max-h-[80vh] flex flex-col"
-            dir="rtl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-800">🎁 إعفاءات شهر {revenueMonthLabel}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {exemptedStudentsThisMonth.length} طالب معفى — إجمالي {formatCurrency(exemptedMonthlyAmount)} ج.م مخصومة من الدخل المتوقع
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowExemptedModal(false)}
-                className="rounded-lg px-2 py-1 text-sm font-black text-slate-400 hover:bg-slate-100"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="overflow-y-auto space-y-2">
-              {exemptedStudentsThisMonth.length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="text-3xl mb-2">🎁</div>
-                  <p className="text-sm font-bold text-slate-600">
-                    لا توجد إعفاءات مسجلة لشهر {revenueMonthLabel}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    استخدم زر "🎁 إعفاء" من جدول التحصيل السريع أو سجل العمليات لإضافة إعفاء جديد
-                  </p>
-                </div>
-              ) : (
-                exemptedStudentsThisMonth.map((student) => {
-                  const price = priceMatrix[priceKey(student.grade!, student.subject!)];
-                  const netFee = typeof price === 'number' && Number.isFinite(price)
-                    ? Math.max(0, price - getStudentDiscount(student))
-                    : 0;
-                  return (
-                    <div
-                      key={student.id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-purple-100 bg-purple-50/40 p-2.5"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-bold text-slate-900">{student.name}</div>
-                        <div className="text-[10px] text-slate-500">
-                          {student.grade || '-'} — {student.subject || '-'}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="rounded-lg bg-purple-100 px-2 py-1 text-[11px] font-bold text-purple-700">
-                          {formatCurrency(netFee)} ج.م
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMonthlyExempt(student, revenueMonthKey)}
-                          className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-200"
-                          title="إلغاء الإعفاء وإعادته للدخل المتوقع"
-                        >
-                          ↩️ إلغاء الإعفاء
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -34,8 +34,8 @@ export interface ApplicationStudent {
   guardian_notes?: string | null;
   address?: string | null;
   school?: string | null;
-  exempted_months?: string[] | null;
-  exemptedMonths?: string[] | null;
+  exempted_months?: string[] | null; // ← جديد
+  exemptedMonths?: string[] | null; // ← جديد (alias)
 }
 
 export type Student = ApplicationStudent;
@@ -99,8 +99,6 @@ type StudentRow = DatabaseStudent & {
 
 /**
  * تحليل قيمة exempted_months القادمة من قاعدة البيانات
- * إلى مصفوفة نصوص نظيفة، مع تحمل كل الأشكال المحتملة:
- * مصفوفة فعلية / نص JSON / نص مفصول بفواصل / null
  */
 const parseExemptedMonths = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -143,30 +141,19 @@ const toStudent = (row: StudentRow): Student => ({
   behavior_rating: row.behavior_rating ?? null,
   discount_type: row.discount_type ?? null,
   subject: row.subject ?? null,
-  due_amount:
-    row.due_amount !== null && row.due_amount !== undefined ? Number(row.due_amount) : 0,
+  due_amount: row.due_amount !== null && row.due_amount !== undefined ? Number(row.due_amount) : 0,
   stage: row.stage || '',
   grade_level: row.grade_level ?? null,
   subjects: row.subjects ?? null,
   parent_whatsapp: row.parent_whatsapp ?? null,
   student_phone: row.student_phone ?? null,
   group: row.group_name || '',
-  dueAmount:
-    row.due_amount !== null && row.due_amount !== undefined ? Number(row.due_amount) : 0,
+  dueAmount: row.due_amount !== null && row.due_amount !== undefined ? Number(row.due_amount) : 0,
   isExempt: row.is_exempt ?? false,
   is_exempt: row.is_exempt ?? false,
-  discountAmount:
-    row.discount_amount !== null && row.discount_amount !== undefined
-      ? Number(row.discount_amount)
-      : 0,
-  discount:
-    row.discount_amount !== null && row.discount_amount !== undefined
-      ? Number(row.discount_amount)
-      : 0,
-  discount_amount:
-    row.discount_amount !== null && row.discount_amount !== undefined
-      ? Number(row.discount_amount)
-      : 0,
+  discountAmount: row.discount_amount !== null && row.discount_amount !== undefined ? Number(row.discount_amount) : 0,
+  discount: row.discount_amount !== null && row.discount_amount !== undefined ? Number(row.discount_amount) : 0,
+  discount_amount: row.discount_amount !== null && row.discount_amount !== undefined ? Number(row.discount_amount) : 0,
   barcode: row.barcode || row.student_code || '',
   guardian_name: row.guardian_name || '',
   guardian_phone: row.guardian_phone || row.parent_phone || '',
@@ -178,11 +165,6 @@ const toStudent = (row: StudentRow): Student => ({
   exemptedMonths: parseExemptedMonths(row.exempted_months),
 });
 
-/**
- * تحويل بيانات التطبيق إلى صف صالح لجدول students.
- * ملاحظة: exempted_months تُرسل فقط إذا كانت معرّفة في الكائن،
- * حتى لا تمسحها التحديثات الجزئية الأخرى عن طريق الخطأ.
- */
 const toRow = (student: StudentInput | StudentUpdateInput, includeCreatedAt = false) =>
   Object.fromEntries(
     Object.entries({
@@ -213,13 +195,11 @@ const toRow = (student: StudentInput | StudentUpdateInput, includeCreatedAt = fa
       guardian_name: student.guardian_name,
       guardian_notes: student.guardian_notes ?? null,
       is_exempt: Boolean(student.is_exempt ?? student.isExempt),
-      discount_amount:
-        Number(student.discount ?? student.discount_amount ?? student.discountAmount) || 0,
+      discount_amount: Number(student.discount ?? student.discount_amount ?? student.discountAmount) || 0,
       created_at: includeCreatedAt ? student.created_at ?? new Date().toISOString() : undefined,
       address: student.address ?? null,
       school: student.school ?? null,
-      exempted_months:
-        student.exempted_months ?? student.exemptedMonths ?? undefined,
+      exempted_months: student.exempted_months ?? student.exemptedMonths ?? undefined, // ← جديد
     }).filter(([, value]) => value !== undefined)
   );
 
@@ -427,14 +407,8 @@ export async function getUniqueStudentsCount(): Promise<number> {
   }
   const uniqueIdentifiers = new Set<string>();
   (data ?? []).forEach(
-    (row: {
-      student_code?: string | null;
-      parent_phone?: string | null;
-      parent_whatsapp?: string | null;
-      id: number;
-    }) => {
-      const identifier =
-        row.student_code || row.parent_phone || row.parent_whatsapp || String(row.id);
+    (row: { student_code?: string | null; parent_phone?: string | null; parent_whatsapp?: string | null; id: number }) => {
+      const identifier = row.student_code || row.parent_phone || row.parent_whatsapp || String(row.id);
       if (identifier) uniqueIdentifiers.add(identifier);
     }
   );
@@ -452,11 +426,7 @@ export async function getUniqueStudents(): Promise<Student[]> {
   ((data as StudentRow[] | null) ?? []).forEach((row) => {
     const student = toStudent(row);
     const identifier =
-      student.student_code ||
-      student.barcode ||
-      student.parent_phone ||
-      student.parent_whatsapp ||
-      String(student.id);
+      student.student_code || student.barcode || student.parent_phone || student.parent_whatsapp || String(student.id);
     if (identifier && !seen.has(identifier)) {
       seen.add(identifier);
       unique.push(student);
@@ -467,8 +437,6 @@ export async function getUniqueStudents(): Promise<Student[]> {
 
 /* =====================================================
    ربط الإعفاءات الشهرية بـ Supabase
-   العمود: students.exempted_months (text[])
-   الصيغة المخزنة: YYYY-MM مثال: 2026-08
    ===================================================== */
 
 const MONTH_KEY_PATTERN = /^\d{4}-\d{2}$/;
@@ -481,9 +449,6 @@ const validateMonthKey = (monthKey: string): string => {
   return key;
 };
 
-/**
- * قراءة قائمة الإعفاءات الحالية لطالب من قاعدة البيانات
- */
 export async function fetchExemptedMonths(studentId: number): Promise<string[]> {
   const numericId = validateStudentId(studentId);
   const { data, error } = await supabase
@@ -498,9 +463,6 @@ export async function fetchExemptedMonths(studentId: number): Promise<string[]> 
   return parseExemptedMonths((data as { exempted_months?: unknown } | null)?.exempted_months);
 }
 
-/**
- * إضافة شهر إلى قائمة إعفاءات الطالب وحفظها في Supabase
- */
 export async function addExemptedMonth(studentId: number, monthKey: string): Promise<Student> {
   const numericId = validateStudentId(studentId);
   const key = validateMonthKey(monthKey);
@@ -521,9 +483,6 @@ export async function addExemptedMonth(studentId: number, monthKey: string): Pro
   return toStudent(data as StudentRow);
 }
 
-/**
- * إزالة شهر من قائمة إعفاءات الطالب وحفظها في Supabase
- */
 export async function removeExemptedMonth(studentId: number, monthKey: string): Promise<Student> {
   const numericId = validateStudentId(studentId);
   const key = validateMonthKey(monthKey);
@@ -544,10 +503,6 @@ export async function removeExemptedMonth(studentId: number, monthKey: string): 
   return toStudent(data as StudentRow);
 }
 
-/**
- * فحص محلي (بدون طلب قاعدة بيانات) هل الطالب معفى من شهر معين؟
- * يعتمد على البيانات المحمّلة بالفعل داخل كائن الطالب
- */
 export function isMonthExempted(
   student:
     | { exempted_months?: string[] | null; exemptedMonths?: string[] | null }
@@ -560,10 +515,6 @@ export function isMonthExempted(
   return list.includes(String(monthKey ?? '').trim());
 }
 
-/**
- * جلب كل الطلاب المعفيين من شهر معين مباشرة من Supabase
- * (مفيد للتقارير الإدارية)
- */
 export async function getStudentsExemptedFromMonth(monthKey: string): Promise<Student[]> {
   const key = validateMonthKey(monthKey);
   const { data, error } = await supabase
